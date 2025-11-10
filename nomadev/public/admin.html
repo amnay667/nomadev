@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Nomadev</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #6C63FF;
+            --secondary: #4A44C6;
+            --accent: #FF6584;
+            --dark: #2A2D43;
+            --light: #F7F7FF;
+            --gray: #8C8CA1;
+            --transition: all 0.3s ease;
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            --radius: 10px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .admin-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .admin-header {
+            background: white;
+            padding: 30px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .admin-header h1 {
+            color: var(--dark);
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+
+        .admin-header p {
+            color: var(--gray);
+            font-size: 1.1rem;
+        }
+
+        .admin-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        .form-section, .projects-section {
+            background: white;
+            padding: 30px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+        }
+
+        .section-title {
+            color: var(--dark);
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--dark);
+            font-weight: 600;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: var(--radius);
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.1);
+        }
+
+        textarea.form-control {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: var(--radius);
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            width: 100%;
+        }
+
+        .btn:hover {
+            background: var(--secondary);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 99, 255, 0.4);
+        }
+
+        .projects-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .project-item {
+            background: var(--light);
+            padding: 20px;
+            border-radius: var(--radius);
+            margin-bottom: 15px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .project-item h3 {
+            color: var(--dark);
+            margin-bottom: 10px;
+        }
+
+        .project-item p {
+            color: var(--gray);
+            margin-bottom: 8px;
+        }
+
+        .tech-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin: 10px 0;
+        }
+
+        .tech-tag {
+            background: var(--primary);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+
+        .project-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn-delete {
+            background: var(--accent);
+            padding: 8px 15px;
+            font-size: 0.9rem;
+        }
+
+        .btn-delete:hover {
+            background: #e0556f;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--gray);
+            padding: 40px 20px;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1><i class="fas fa-cogs"></i> Panel Admin - Nomadev</h1>
+            <p>Gérez vos projets portfolio</p>
+        </div>
+
+        <div class="admin-grid">
+            <!-- Formulaire d'ajout -->
+            <div class="form-section">
+                <h2 class="section-title"><i class="fas fa-plus-circle"></i> Ajouter un Projet</h2>
+                <form id="projectForm">
+                    <div class="form-group">
+                        <label for="title">Titre du Projet</label>
+                        <input type="text" id="title" class="form-control" placeholder="Mon Application Web" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea id="description" class="form-control" placeholder="Description détaillée du projet..." required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="technologies">Technologies (séparées par des virgules)</label>
+                        <input type="text" id="technologies" class="form-control" placeholder="React, Node.js, MongoDB" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="githubUrl">Lien GitHub</label>
+                        <input type="url" id="githubUrl" class="form-control" placeholder="https://github.com/username/project" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="liveUrl">Lien Live Demo (optionnel)</label>
+                        <input type="url" id="liveUrl" class="form-control" placeholder="https://mon-site.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="imageUrl">URL de l'image (optionnel)</label>
+                        <input type="url" id="imageUrl" class="form-control" placeholder="https://example.com/image.jpg">
+                    </div>
+
+                    <button type="button" class="btn" onclick="addProject()">
+                        <i class="fas fa-plus"></i> Ajouter le Projet
+                    </button>
+                </form>
+            </div>
+
+            <!-- Liste des projets -->
+            <div class="projects-section">
+                <h2 class="section-title"><i class="fas fa-list"></i> Projets Existants</h2>
+                <div class="projects-list" id="projectsList">
+                    <!-- Les projets seront chargés ici -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Charger les projets au démarrage
+        document.addEventListener('DOMContentLoaded', function() {
+            loadProjects();
+        });
+
+        // Charger les projets depuis l'API
+        async function loadProjects() {
+            try {
+                const response = await fetch('/api/projects');
+                const projects = await response.json();
+                displayProjects(projects);
+            } catch (error) {
+                console.error('Erreur lors du chargement des projets:', error);
+                showError('Erreur de chargement des projets');
+            }
+        }
+
+        // Afficher les projets dans la liste
+        function displayProjects(projects) {
+            const projectsList = document.getElementById('projectsList');
+            
+            if (projects.length === 0) {
+                projectsList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-folder-open"></i>
+                        <h3>Aucun projet</h3>
+                        <p>Ajoutez votre premier projet !</p>
+                    </div>
+                `;
+                return;
+            }
+
+            projectsList.innerHTML = projects.map(project => `
+                <div class="project-item">
+                    <h3>${project.title}</h3>
+                    <p>${project.description}</p>
+                    <div class="tech-tags">
+                        ${project.technologies.map(tech => `<span class="tech-tag">${tech.trim()}</span>`).join('')}
+                    </div>
+                    <div class="project-links">
+                        <small><strong>GitHub:</strong> <a href="${project.githubUrl}" target="_blank">${project.githubUrl}</a></small>
+                        ${project.liveUrl ? `<br><small><strong>Live Demo:</strong> <a href="${project.liveUrl}" target="_blank">${project.liveUrl}</a></small>` : ''}
+                    </div>
+                    <div class="project-actions">
+                        <button class="btn btn-delete" onclick="deleteProject(${project.id})">
+                            <i class="fas fa-trash"></i> Supprimer
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Ajouter un nouveau projet
+        async function addProject() {
+            const projectData = {
+                title: document.getElementById('title').value,
+                description: document.getElementById('description').value,
+                technologies: document.getElementById('technologies').value.split(',').map(tech => tech.trim()),
+                githubUrl: document.getElementById('githubUrl').value,
+                liveUrl: document.getElementById('liveUrl').value || '',
+                imageUrl: document.getElementById('imageUrl').value || ''
+            };
+
+            // Validation basique
+            if (!projectData.title || !projectData.description || !projectData.technologies.length || !projectData.githubUrl) {
+                alert('Veuillez remplir tous les champs obligatoires');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/projects', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(projectData)
+                });
+
+                if (response.ok) {
+                    // Réinitialiser le formulaire
+                    document.getElementById('projectForm').reset();
+                    
+                    // Recharger la liste des projets
+                    loadProjects();
+                    
+                    alert('✅ Projet ajouté avec succès!');
+                } else {
+                    throw new Error('Erreur serveur');
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                alert('❌ Erreur lors de l\'ajout du projet');
+            }
+        }
+
+        // Supprimer un projet
+        async function deleteProject(projectId) {
+            if (!confirm('Êtes-vous sûr de vouloir supprimer ce projet ?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/projects/${projectId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadProjects();
+                    alert('✅ Projet supprimé avec succès!');
+                } else {
+                    throw new Error('Erreur serveur');
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                alert('❌ Erreur lors de la suppression du projet');
+            }
+        }
+
+        // Afficher les erreurs
+        function showError(message) {
+            const projectsList = document.getElementById('projectsList');
+            projectsList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Erreur</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

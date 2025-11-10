@@ -1,0 +1,1690 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nomadev | Créateurs Digitaux</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/ScrollTrigger.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/typed.js/2.0.12/typed.min.js"></script>
+    <style>
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-purple: #b967ff;
+            --neon-pink: #ff2a6d;
+            --neon-green: #00ff88;
+            --dark-bg: #0a0a16;
+            --darker-bg: #050510;
+            --card-bg: rgba(16, 18, 37, 0.7);
+            --text-primary: #ffffff;
+            --text-secondary: #b8b8d0;
+            --transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: var(--dark-bg);
+            color: var(--text-primary);
+            font-family: 'Exo 2', sans-serif;
+            line-height: 1.6;
+            overflow-x: hidden;
+            background: linear-gradient(135deg, var(--darker-bg) 0%, var(--dark-bg) 100%);
+        }
+
+        h1, h2, h3, h4, h5 {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        section {
+            min-height: 100vh;
+            padding: 100px 0;
+            position: relative;
+        }
+
+        /* Particles Background */
+        #particles-js {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: -1;
+        }
+
+        /* Navigation 3D */
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1000;
+            padding: 20px 0;
+            background: rgba(10, 10, 22, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0, 243, 255, 0.1);
+            transform-style: preserve-3d;
+            perspective: 1000px;
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 900;
+            background: linear-gradient(45deg, var(--neon-blue), var(--neon-purple));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+            transition: var(--transition);
+            transform: translateZ(0);
+        }
+
+        .logo:hover {
+            transform: translateZ(20px) scale(1.1);
+            text-shadow: 0 0 20px rgba(0, 243, 255, 0.8);
+        }
+
+        .nav-links {
+            display: flex;
+            list-style: none;
+        }
+
+        .nav-links li {
+            margin-left: 40px;
+            position: relative;
+            transform-style: preserve-3d;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-weight: 600;
+            transition: var(--transition);
+            padding: 8px 0;
+            position: relative;
+            transform: translateZ(0);
+        }
+
+        .nav-links a:after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
+            transition: var(--transition);
+            box-shadow: 0 0 10px var(--neon-blue);
+            transform: translateZ(0);
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+            transform: translateZ(10px);
+        }
+
+        .nav-links a:hover:after {
+            width: 100%;
+        }
+
+        .menu-toggle {
+            display: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--neon-blue);
+            transition: var(--transition);
+        }
+
+        .menu-toggle:hover {
+            transform: rotate(90deg);
+        }
+
+        /* Hero Section avec effet parallaxe */
+        .hero {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            transform-style: preserve-3d;
+        }
+
+        .parallax-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        .parallax-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .layer-1 {
+            background: radial-gradient(circle at 30% 30%, rgba(0, 243, 255, 0.1) 0%, transparent 50%);
+            transform: translateZ(-100px) scale(2);
+        }
+
+        .layer-2 {
+            background: radial-gradient(circle at 70% 70%, rgba(185, 103, 255, 0.1) 0%, transparent 50%);
+            transform: translateZ(-50px) scale(1.5);
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            transform: translateZ(0);
+        }
+
+        .hero-content h1 {
+            font-size: 4.5rem;
+            margin-bottom: 20px;
+            line-height: 1.1;
+            text-shadow: 0 0 20px rgba(0, 243, 255, 0.7);
+            background: linear-gradient(45deg, var(--neon-blue), var(--neon-purple), var(--neon-pink));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: glow 3s ease-in-out infinite alternate;
+            transform: translateZ(0);
+        }
+
+        @keyframes glow {
+            from {
+                text-shadow: 0 0 10px var(--neon-blue), 0 0 20px var(--neon-blue), 0 0 30px var(--neon-blue);
+            }
+            to {
+                text-shadow: 0 0 15px var(--neon-purple), 0 0 25px var(--neon-purple), 0 0 35px var(--neon-purple);
+            }
+        }
+
+        .hero-content p {
+            font-size: 1.4rem;
+            max-width: 700px;
+            margin: 0 auto 40px;
+            color: var(--text-secondary);
+            transform: translateZ(0);
+        }
+
+        .typing-text {
+            border-right: 3px solid var(--neon-blue);
+            animation: blink 1s infinite;
+            padding-right: 5px;
+        }
+
+        @keyframes blink {
+            0%, 100% { border-color: var(--neon-blue); }
+            50% { border-color: transparent; }
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 15px 40px;
+            background: transparent;
+            color: var(--neon-blue);
+            border: 2px solid var(--neon-blue);
+            border-radius: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin: 0 15px;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+            transform: translateZ(0);
+        }
+
+        .btn:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.4), transparent);
+            transition: 0.5s;
+            z-index: -1;
+        }
+
+        .btn:hover {
+            color: var(--dark-bg);
+            background: var(--neon-blue);
+            box-shadow: 0 0 20px var(--neon-blue), 0 0 40px var(--neon-blue);
+            transform: translateZ(10px) scale(1.05);
+        }
+
+        .btn:hover:before {
+            left: 100%;
+        }
+
+        .btn-accent {
+            color: var(--neon-pink);
+            border-color: var(--neon-pink);
+            box-shadow: 0 0 15px rgba(255, 42, 109, 0.3);
+        }
+
+        .btn-accent:hover {
+            color: var(--dark-bg);
+            background: var(--neon-pink);
+            box-shadow: 0 0 20px var(--neon-pink), 0 0 40px var(--neon-pink);
+        }
+
+        /* Floating Shapes 3D */
+        .floating-shapes {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 1;
+            transform-style: preserve-3d;
+        }
+
+        .shape {
+            position: absolute;
+            background: rgba(0, 243, 255, 0.1);
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            animation: float 15s infinite linear;
+            transform-style: preserve-3d;
+        }
+
+        .shape:nth-child(1) {
+            width: 80px;
+            height: 80px;
+            top: 20%;
+            left: 10%;
+            animation-delay: 0s;
+            border-radius: 50%;
+            transform: translateZ(-50px);
+        }
+
+        .shape:nth-child(2) {
+            width: 120px;
+            height: 120px;
+            top: 60%;
+            left: 15%;
+            animation-delay: 2s;
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+            transform: translateZ(-30px);
+        }
+
+        .shape:nth-child(3) {
+            width: 100px;
+            height: 100px;
+            top: 40%;
+            right: 20%;
+            animation-delay: 4s;
+            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+            transform: translateZ(-70px);
+        }
+
+        .shape:nth-child(4) {
+            width: 60px;
+            height: 60px;
+            top: 80%;
+            right: 10%;
+            animation-delay: 6s;
+            clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%);
+            transform: translateZ(-20px);
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(0) rotate(0deg) translateZ(var(--z, 0px));
+            }
+            50% {
+                transform: translateY(-40px) rotate(180deg) translateZ(var(--z, 0px));
+            }
+            100% {
+                transform: translateY(0) rotate(360deg) translateZ(var(--z, 0px));
+            }
+        }
+
+        /* About Section avec effet de défilement parallaxe */
+        .about {
+            display: flex;
+            align-items: center;
+            transform-style: preserve-3d;
+        }
+
+        .about-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+        }
+
+        .about-text h2 {
+            font-size: 2.8rem;
+            margin-bottom: 30px;
+            background: linear-gradient(45deg, var(--neon-blue), var(--neon-purple));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            transform: translateZ(0);
+        }
+
+        .about-text p {
+            font-size: 1.2rem;
+            margin-bottom: 25px;
+            color: var(--text-secondary);
+            transform: translateZ(0);
+        }
+
+        .team-members {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 40px;
+            transform-style: preserve-3d;
+        }
+
+        .team-member {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 243, 255, 0.2);
+            transition: var(--transition);
+            text-align: center;
+            transform: translateZ(0);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .team-member:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.1), transparent);
+            transition: 0.5s;
+        }
+
+        .team-member:hover:before {
+            left: 100%;
+        }
+
+        .team-member:hover {
+            transform: translateY(-10px) translateZ(10px);
+            border-color: var(--neon-blue);
+            box-shadow: 0 10px 30px rgba(0, 243, 255, 0.2);
+        }
+
+        .member-photo {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+            transition: var(--transition);
+            transform: translateZ(0);
+        }
+
+        .team-member:hover .member-photo {
+            transform: translateZ(20px) scale(1.1);
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
+        }
+
+        .member-role {
+            color: var(--neon-blue);
+            font-weight: 600;
+            margin: 10px 0;
+            transform: translateZ(0);
+        }
+
+        .skills-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 30px;
+            transform-style: preserve-3d;
+        }
+
+        .skill {
+            background: var(--card-bg);
+            padding: 12px 25px;
+            border-radius: 4px;
+            font-weight: 600;
+            border: 1px solid rgba(0, 243, 255, 0.2);
+            transition: var(--transition);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transform: translateZ(0);
+        }
+
+        .skill:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.2), transparent);
+            transition: 0.5s;
+        }
+
+        .skill:hover {
+            transform: translateY(-5px) translateZ(10px);
+            border-color: var(--neon-blue);
+            box-shadow: 0 5px 15px rgba(0, 243, 255, 0.3);
+        }
+
+        .skill:hover:before {
+            left: 100%;
+        }
+
+        .about-visual {
+            position: relative;
+            height: 500px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transform-style: preserve-3d;
+        }
+
+        .visual-element {
+            width: 300px;
+            height: 300px;
+            background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
+            border-radius: 50%;
+            position: relative;
+            animation: rotate 20s infinite linear;
+            box-shadow: 0 0 50px rgba(0, 243, 255, 0.5);
+            transform-style: preserve-3d;
+        }
+
+        .visual-element:before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            bottom: 20px;
+            background: var(--dark-bg);
+            border-radius: 50%;
+            z-index: 1;
+            transform: translateZ(0);
+        }
+
+        .visual-element:after {
+            content: '';
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            right: 40px;
+            bottom: 40px;
+            background: linear-gradient(135deg, var(--neon-pink), transparent);
+            border-radius: 50%;
+            z-index: 2;
+            opacity: 0.7;
+            transform: translateZ(0);
+        }
+
+        @keyframes rotate {
+            0% {
+                transform: rotate(0deg) translateZ(0);
+            }
+            100% {
+                transform: rotate(360deg) translateZ(0);
+            }
+        }
+
+        /* Projects Section avec effet de grille interactive */
+        .projects {
+            position: relative;
+            transform-style: preserve-3d;
+        }
+
+        .projects h2 {
+            font-size: 2.8rem;
+            text-align: center;
+            margin-bottom: 70px;
+            background: linear-gradient(45deg, var(--neon-pink), var(--neon-purple));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            transform: translateZ(0);
+        }
+
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 40px;
+            transform-style: preserve-3d;
+        }
+
+        .project-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            overflow: hidden;
+            transition: var(--transition);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            opacity: 0;
+            transform: translateY(50px) translateZ(0);
+            transform-style: preserve-3d;
+        }
+
+        .project-card.visible {
+            opacity: 1;
+            transform: translateY(0) translateZ(0);
+        }
+
+        .project-card:hover {
+            transform: translateY(-15px) translateZ(20px) rotateX(5deg) rotateY(5deg);
+            border-color: var(--neon-blue);
+            box-shadow: 0 15px 30px rgba(0, 243, 255, 0.2);
+        }
+
+        .project-img {
+            height: 220px;
+            background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
+            position: relative;
+            overflow: hidden;
+            transform: translateZ(0);
+        }
+
+        .project-img:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, rgba(0, 243, 255, 0.3), rgba(185, 103, 255, 0.3));
+            opacity: 0;
+            transition: var(--transition);
+            transform: translateZ(0);
+        }
+
+        .project-card:hover .project-img:before {
+            opacity: 1;
+        }
+
+        .project-info {
+            padding: 25px;
+            transform: translateZ(0);
+        }
+
+        .project-info h3 {
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            color: var(--neon-blue);
+            transform: translateZ(0);
+        }
+
+        .project-info p {
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            transform: translateZ(0);
+        }
+
+        .project-tech {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            transform: translateZ(0);
+        }
+
+        .tech-tag {
+            background: rgba(0, 243, 255, 0.1);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            transition: var(--transition);
+            transform: translateZ(0);
+        }
+
+        .tech-tag:hover {
+            transform: translateZ(10px) scale(1.1);
+            background: rgba(0, 243, 255, 0.2);
+        }
+
+        /* Services Section avec effet de carte 3D */
+        .services {
+            position: relative;
+            transform-style: preserve-3d;
+        }
+
+        .services h2 {
+            font-size: 2.8rem;
+            text-align: center;
+            margin-bottom: 70px;
+            background: linear-gradient(45deg, var(--neon-blue), var(--neon-pink));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            transform: translateZ(0);
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 30px;
+            transform-style: preserve-3d;
+        }
+
+        .service-card {
+            background: var(--card-bg);
+            padding: 40px 30px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+            transform: translateZ(0);
+            transform-style: preserve-3d;
+        }
+
+        .service-card:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.1), transparent);
+            transition: 0.5s;
+        }
+
+        .service-card:hover:before {
+            left: 100%;
+        }
+
+        .service-card:hover {
+            transform: translateY(-10px) translateZ(20px) rotateX(5deg);
+            border-color: var(--neon-blue);
+            box-shadow: 0 10px 30px rgba(0, 243, 255, 0.2);
+        }
+
+        .service-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto 25px;
+            font-size: 2rem;
+            color: white;
+            transition: var(--transition);
+            transform: translateZ(0);
+        }
+
+        .service-card:hover .service-icon {
+            transform: translateZ(30px) scale(1.2) rotateY(180deg);
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
+        }
+
+        .service-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            color: var(--neon-blue);
+            transform: translateZ(0);
+        }
+
+        .service-card p {
+            color: var(--text-secondary);
+            transform: translateZ(0);
+        }
+
+        /* Contact Section avec formulaire interactif */
+        .contact {
+            display: flex;
+            align-items: center;
+            transform-style: preserve-3d;
+        }
+
+        .contact-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+        }
+
+        .contact-info h2 {
+            font-size: 2.8rem;
+            margin-bottom: 30px;
+            background: linear-gradient(45deg, var(--neon-blue), var(--neon-purple));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            transform: translateZ(0);
+        }
+
+        .contact-info p {
+            font-size: 1.2rem;
+            margin-bottom: 25px;
+            color: var(--text-secondary);
+            transform: translateZ(0);
+        }
+
+        .contact-details {
+            margin-top: 40px;
+            transform-style: preserve-3d;
+        }
+
+        .contact-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            transform: translateZ(0);
+            transition: var(--transition);
+        }
+
+        .contact-item:hover {
+            transform: translateX(10px) translateZ(10px);
+        }
+
+        .contact-item i {
+            width: 50px;
+            height: 50px;
+            background: var(--card-bg);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 15px;
+            color: var(--neon-blue);
+            font-size: 1.2rem;
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            transition: var(--transition);
+            transform: translateZ(0);
+        }
+
+        .contact-item:hover i {
+            background: var(--neon-blue);
+            color: var(--dark-bg);
+            box-shadow: 0 0 15px var(--neon-blue);
+            transform: translateZ(20px) rotate(360deg);
+        }
+
+        .contact-form {
+            background: var(--card-bg);
+            padding: 40px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 243, 255, 0.2);
+            transform: translateZ(0);
+            transform-style: preserve-3d;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+            position: relative;
+            transform: translateZ(0);
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            transform: translateZ(0);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 15px;
+            background: rgba(10, 10, 22, 0.7);
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            border-radius: 5px;
+            font-size: 1rem;
+            color: var(--text-primary);
+            transition: var(--transition);
+            transform: translateZ(0);
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+            transform: translateZ(10px);
+        }
+
+        textarea.form-control {
+            min-height: 150px;
+            resize: vertical;
+        }
+
+        /* Footer avec effet de vague animée */
+        footer {
+            background: var(--darker-bg);
+            padding: 50px 0 20px;
+            border-top: 1px solid rgba(0, 243, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .wave {
+            position: absolute;
+            top: -50px;
+            left: 0;
+            width: 100%;
+            height: 50px;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'%3E%3Cpath d='M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z' fill='%230a0a16'%3E%3C/path%3E%3C/svg%3E");
+            background-size: 1200px 100px;
+            animation: wave 10s linear infinite;
+        }
+
+        @keyframes wave {
+            0% {
+                background-position-x: 0;
+            }
+            100% {
+                background-position-x: 1200px;
+            }
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            transform: translateZ(0);
+        }
+
+        .social-links {
+            display: flex;
+            gap: 20px;
+            transform-style: preserve-3d;
+        }
+
+        .social-link {
+            width: 50px;
+            height: 50px;
+            background: var(--card-bg);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--neon-blue);
+            text-decoration: none;
+            transition: var(--transition);
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            transform: translateZ(0);
+        }
+
+        .social-link:hover {
+            background: var(--neon-blue);
+            color: var(--dark-bg);
+            transform: translateY(-5px) translateZ(20px);
+            box-shadow: 0 5px 15px rgba(0, 243, 255, 0.5);
+        }
+
+        .copyright {
+            text-align: center;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            transform: translateZ(0);
+        }
+
+        /* Canvas 3D pour effet de fond avancé */
+        #three-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+        }
+
+        /* Page Navigation avec effet de particules */
+        .page-navigation {
+            display: flex;
+            justify-content: center;
+            margin-top: 50px;
+            gap: 20px;
+            transform-style: preserve-3d;
+        }
+
+        .page-link {
+            padding: 12px 25px;
+            background: var(--card-bg);
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 5px;
+            border: 1px solid rgba(0, 243, 255, 0.2);
+            transition: var(--transition);
+            font-weight: 600;
+            transform: translateZ(0);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .page-link:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.2), transparent);
+            transition: 0.5s;
+        }
+
+        .page-link:hover {
+            color: var(--neon-blue);
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+            transform: translateZ(10px);
+        }
+
+        .page-link:hover:before {
+            left: 100%;
+        }
+
+        /* Cursor personnalisé */
+        .cursor {
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--neon-blue);
+            pointer-events: none;
+            z-index: 9999;
+            mix-blend-mode: difference;
+            transition: transform 0.2s;
+        }
+
+        .cursor-follower {
+            position: fixed;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid var(--neon-blue);
+            pointer-events: none;
+            z-index: 9998;
+            transition: all 0.6s ease;
+        }
+
+        /* Responsive Styles */
+        @media (max-width: 1200px) {
+            .hero-content h1 {
+                font-size: 3.5rem;
+            }
+            
+            .about-content, .contact-content {
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+            
+            .about-visual {
+                height: 400px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .menu-toggle {
+                display: block;
+            }
+            
+            .nav-links {
+                position: fixed;
+                top: 80px;
+                right: -100%;
+                width: 80%;
+                height: calc(100vh - 80px);
+                background: var(--darker-bg);
+                flex-direction: column;
+                align-items: center;
+                padding-top: 50px;
+                transition: var(--transition);
+                border-left: 1px solid rgba(0, 243, 255, 0.2);
+                transform-style: preserve-3d;
+            }
+            
+            .nav-links.active {
+                right: 0;
+                transform: translateZ(0);
+            }
+            
+            .nav-links li {
+                margin: 20px 0;
+                transform: translateZ(0);
+            }
+            
+            .hero-content h1 {
+                font-size: 2.5rem;
+            }
+            
+            .hero-content p {
+                font-size: 1.1rem;
+            }
+            
+            .projects-grid, .services-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .team-members {
+                grid-template-columns: 1fr;
+            }
+            
+            .footer-content {
+                flex-direction: column;
+                gap: 30px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .hero-content h1 {
+                font-size: 2rem;
+            }
+            
+            .btn {
+                padding: 12px 25px;
+                font-size: 0.9rem;
+                margin: 5px;
+            }
+            
+            .about-visual {
+                height: 300px;
+            }
+            
+            .visual-element {
+                width: 200px;
+                height: 200px;
+            }
+            
+            .cursor, .cursor-follower {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Canvas 3D -->
+    <canvas id="three-canvas"></canvas>
+
+    <!-- Particles Background -->
+    <div id="particles-js"></div>
+
+    <!-- Curseur personnalisé -->
+    <div class="cursor"></div>
+    <div class="cursor-follower"></div>
+
+    <!-- Header & Navigation -->
+    <header>
+        <div class="container">
+            <nav>
+                <div class="logo">NOMADEV</div>
+                <ul class="nav-links">
+                    <li><a href="#home">Accueil</a></li>
+                    <li><a href="#about">À Propos</a></li>
+                    <li><a href="#services">Services</a></li>
+                    <li><a href="#projects">Projets</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                </ul>
+                <div class="menu-toggle">
+                    <i class="fas fa-bars"></i>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero" id="home">
+        <div class="parallax-bg">
+            <div class="parallax-layer layer-1"></div>
+            <div class="parallax-layer layer-2"></div>
+        </div>
+        <div class="container">
+            <div class="hero-content">
+                <h1>NOMADEV<br>CRÉATEURS DIGITAUX</h1>
+                <p class="typing-text">Nous transformons vos idées en expériences digitales immersives</p>
+                <div class="hero-btns">
+                    <a href="#projects" class="btn">Voir Nos Projets</a>
+                    <a href="#contact" class="btn btn-accent">Commencer un Projet</a>
+                </div>
+            </div>
+        </div>
+        <div class="floating-shapes">
+            <div class="shape"></div>
+            <div class="shape"></div>
+            <div class="shape"></div>
+            <div class="shape"></div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section class="about" id="about">
+        <div class="container">
+            <h2>Notre Équipe</h2>
+            <div class="about-content">
+                <div class="about-text">
+                    <p>Nomadev est une agence digitale créative fondée par deux passionnés de technologie et d'innovation. Nous combinons expertise technique et vision stratégique pour créer des solutions web qui marquent les esprits.</p>
+                    
+                    <div class="team-members">
+                        <div class="team-member">
+                            <div class="member-photo">AH</div>
+                            <h3>Amnay Hamdad</h3>
+                            <div class="member-role">Développeur Full-Stack & CTO</div>
+                            <p>Étudiant en 2ème année de Bachelor Technologie et Management à l'ESILV. Spécialiste en développement web et solutions techniques innovantes.</p>
+                        </div>
+                        
+                        <div class="team-member">
+                            <div class="member-photo">MB</div>
+                            <h3>Mahdi Boudia</h3>
+                            <div class="member-role">Stratège Digital & CEO</div>
+                            <p>Étudiant en 1ère année d'Économie à la Sorbonne. Expert en stratégie digitale, marketing et expérience utilisateur.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="skills-container">
+                        <div class="skill">Développement Web</div>
+                        <div class="skill">Design UI/UX</div>
+                        <div class="skill">Stratégie Digitale</div>
+                        <div class="skill">E-commerce</div>
+                        <div class="skill">Applications Mobiles</div>
+                        <div class="skill">SEO & Marketing</div>
+                    </div>
+                </div>
+                <div class="about-visual">
+                    <div class="visual-element"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Services Section -->
+    <section class="services" id="services">
+        <div class="container">
+            <h2>Nos Services</h2>
+            <div class="services-grid">
+                <div class="service-card">
+                    <div class="service-icon">
+                        <i class="fas fa-code"></i>
+                    </div>
+                    <h3>Développement Web</h3>
+                    <p>Création de sites web sur mesure, applications web et solutions e-commerce avec les dernières technologies.</p>
+                </div>
+                
+                <div class="service-card">
+                    <div class="service-icon">
+                        <i class="fas fa-paint-brush"></i>
+                    </div>
+                    <h3>Design UI/UX</h3>
+                    <p>Conception d'interfaces utilisateur intuitives et d'expériences digitales mémorables qui convertissent.</p>
+                </div>
+                
+                <div class="service-card">
+                    <div class="service-icon">
+                        <i class="fas fa-shopping-cart"></i>
+                    </div>
+                    <h3>E-commerce</h3>
+                    <p>Développement de boutiques en ligne performantes avec systèmes de paiement sécurisés et gestion de stock.</p>
+                </div>
+                
+                <div class="service-card">
+                    <div class="service-icon">
+                        <i class="fas fa-mobile-alt"></i>
+                    </div>
+                    <h3>Applications Mobiles</h3>
+                    <p>Création d'applications mobiles natives et hybrides pour iOS et Android avec des interfaces optimisées.</p>
+                </div>
+                
+                <div class="service-card">
+                    <div class="service-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h3>Stratégie Digitale</h3>
+                    <p>Audit, conseil et mise en place de stratégies digitales pour maximiser votre présence en ligne.</p>
+                </div>
+                
+                <div class="service-card">
+                    <div class="service-icon">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <h3>SEO & Référencement</h3>
+                    <p>Optimisation pour les moteurs de recherche et stratégies de contenu pour améliorer votre visibilité.</p>
+                </div>
+            </div>
+            
+            <div class="page-navigation">
+                <a href="#home" class="page-link">Accueil</a>
+                <a href="#projects" class="page-link">Voir Nos Projets</a>
+                <a href="#contact" class="page-link">Nous Contacter</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Projects Section -->
+    <section class="projects" id="projects">
+        <div class="container">
+            <h2>Nos Projets</h2>
+            <div class="projects-grid">
+                <!-- Project 1 -->
+                <div class="project-card">
+                    <div class="project-img">
+                        <div style="width: 100%; height: 100%; background: linear-gradient(135deg, var(--neon-blue) 0%, var(--neon-purple) 100%); display: flex; justify-content: center; align-items: center; color: white; font-weight: bold; font-size: 1.5rem;">
+                            E-COMMERCE LUXE
+                        </div>
+                    </div>
+                    <div class="project-info">
+                        <h3>Boutique en Ligne Haut de Gamme</h3>
+                        <p>Plateforme e-commerce pour une marque de luxe avec expérience utilisateur immersive et système de personnalisation avancé.</p>
+                        <div class="project-tech">
+                            <span class="tech-tag">React</span>
+                            <span class="tech-tag">Node.js</span>
+                            <span class="tech-tag">MongoDB</span>
+                            <span class="tech-tag">Stripe</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Project 2 -->
+                <div class="project-card">
+                    <div class="project-img">
+                        <div style="width: 100%; height: 100%; background: linear-gradient(135deg, var(--neon-pink) 0%, var(--neon-purple) 100%); display: flex; justify-content: center; align-items: center; color: white; font-weight: bold; font-size: 1.5rem;">
+                            APP MOBILE
+                        </div>
+                    </div>
+                    <div class="project-info">
+                        <h3>Application de Livraison</h3>
+                        <p>Application mobile complète avec système de géolocalisation, paiement en ligne et interface utilisateur intuitive.</p>
+                        <div class="project-tech">
+                            <span class="tech-tag">React Native</span>
+                            <span class="tech-tag">Firebase</span>
+                            <span class="tech-tag">Google Maps API</span>
+                            <span class="tech-tag">Redux</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Project 3 -->
+                <div class="project-card">
+                    <div class="project-img">
+                        <div style="width: 100%; height: 100%; background: linear-gradient(135deg, var(--neon-blue) 0%, var(--neon-pink) 100%); display: flex; justify-content: center; align-items: center; color: white; font-weight: bold; font-size: 1.5rem;">
+                            PORTFOLIO ARTISTE
+                        </div>
+                    </div>
+                    <div class="project-info">
+                        <h3>Portfolio Digital Interactif</h3>
+                        <p>Site portfolio immersif pour un artiste contemporain avec galerie 3D, animations personnalisées et expérience de navigation unique.</p>
+                        <div class="project-tech">
+                            <span class="tech-tag">Three.js</span>
+                            <span class="tech-tag">GSAP</span>
+                            <span class="tech-tag">WebGL</span>
+                            <span class="tech-tag">Canvas</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section class="contact" id="contact">
+        <div class="container">
+            <div class="contact-content">
+                <div class="contact-info">
+                    <h2>Lançons Votre Projet</h2>
+                    <p>Prêt à transformer votre présence digitale ? Discutons de la création d'une expérience web mémorable pour votre entreprise.</p>
+                    <div class="contact-details">
+                        <div class="contact-item">
+                            <i class="fas fa-envelope"></i>
+                            <span>contact@nomadev.fr</span>
+                        </div>
+                        <div class="contact-item">
+                            <i class="fas fa-phone"></i>
+                            <span>+33 1 23 45 67 89</span>
+                        </div>
+                        <div class="contact-item">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>Paris, France</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="contact-form">
+                    <form id="contactForm">
+                        <div class="form-group">
+                            <label for="name">Votre Nom</label>
+                            <input type="text" id="name" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Votre Email</label>
+                            <input type="email" id="email" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="subject">Type de Projet</label>
+                            <input type="text" id="subject" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="message">Votre Vision</label>
+                            <textarea id="message" class="form-control" required></textarea>
+                        </div>
+                        <button type="submit" class="btn">Lancer le Projet</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="wave"></div>
+        <div class="container">
+            <div class="footer-content">
+                <div class="logo">NOMADEV</div>
+                <div class="social-links">
+                    <a href="#" class="social-link"><i class="fab fa-github"></i></a>
+                    <a href="#" class="social-link"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="#" class="social-link"><i class="fab fa-twitter"></i></a>
+                    <a href="#" class="social-link"><i class="fab fa-instagram"></i></a>
+                </div>
+            </div>
+            <div class="copyright">
+                <p>&copy; 2023 NOMADEV. Créé avec <i class="fas fa-heart" style="color: var(--neon-pink);"></i> et beaucoup de café.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Initialisation de Three.js pour l'arrière-plan 3D
+        let scene, camera, renderer, particles;
+        
+        function initThreeJS() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('three-canvas'), alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            // Création de particules pour l'arrière-plan
+            const particleGeometry = new THREE.BufferGeometry();
+            const particleCount = 1500;
+            
+            const posArray = new Float32Array(particleCount * 3);
+            
+            for(let i = 0; i < particleCount * 3; i++) {
+                posArray[i] = (Math.random() - 0.5) * 10;
+            }
+            
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            
+            const particleMaterial = new THREE.PointsMaterial({
+                size: 0.02,
+                color: 0x00f3ff,
+                transparent: true,
+                opacity: 0.6
+            });
+            
+            particles = new THREE.Points(particleGeometry, particleMaterial);
+            scene.add(particles);
+            
+            camera.position.z = 2;
+            
+            // Animation des particules
+            function animate() {
+                requestAnimationFrame(animate);
+                
+                particles.rotation.x += 0.0005;
+                particles.rotation.y += 0.001;
+                
+                renderer.render(scene, camera);
+            }
+            
+            animate();
+            
+            // Redimensionnement
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        // Initialisation de Particles.js
+        particlesJS('particles-js', {
+            particles: {
+                number: { value: 80, density: { enable: true, value_area: 800 } },
+                color: { value: "#00f3ff" },
+                shape: { type: "circle" },
+                opacity: { value: 0.5, random: true },
+                size: { value: 3, random: true },
+                line_linked: {
+                    enable: true,
+                    distance: 150,
+                    color: "#00f3ff",
+                    opacity: 0.2,
+                    width: 1
+                },
+                move: {
+                    enable: true,
+                    speed: 2,
+                    direction: "none",
+                    random: true,
+                    straight: false,
+                    out_mode: "out",
+                    bounce: false
+                }
+            },
+            interactivity: {
+                detect_on: "canvas",
+                events: {
+                    onhover: { enable: true, mode: "repulse" },
+                    onclick: { enable: true, mode: "push" },
+                    resize: true
+                }
+            }
+        });
+
+        // Initialisation de GSAP et ScrollTrigger
+        gsap.registerPlugin(ScrollTrigger);
+
+        // Animation au défilement
+        gsap.utils.toArray('section').forEach(section => {
+            gsap.fromTo(section, 
+                { opacity: 0, y: 50 },
+                { 
+                    opacity: 1, 
+                    y: 0, 
+                    duration: 1, 
+                    scrollTrigger: {
+                        trigger: section,
+                        start: "top 80%",
+                        end: "bottom 20%",
+                        toggleActions: "play none none reverse"
+                    }
+                }
+            );
+        });
+
+        // Animation des cartes de projet
+        gsap.utils.toArray('.project-card').forEach((card, i) => {
+            gsap.fromTo(card, 
+                { opacity: 0, y: 100, rotationY: 10 },
+                { 
+                    opacity: 1, 
+                    y: 0, 
+                    rotationY: 0,
+                    duration: 0.8, 
+                    delay: i * 0.2,
+                    scrollTrigger: {
+                        trigger: card,
+                        start: "top 85%",
+                        toggleActions: "play none none reverse"
+                    }
+                }
+            );
+        });
+
+        // Effet de parallaxe
+        gsap.to('.layer-1', {
+            yPercent: -20,
+            ease: "none",
+            scrollTrigger: {
+                trigger: '.hero',
+                start: "top bottom",
+                end: "bottom top",
+                scrub: true
+            }
+        });
+
+        gsap.to('.layer-2', {
+            yPercent: -10,
+            ease: "none",
+            scrollTrigger: {
+                trigger: '.hero',
+                start: "top bottom",
+                end: "bottom top",
+                scrub: true
+            }
+        });
+
+        // Curseur personnalisé
+        const cursor = document.querySelector('.cursor');
+        const cursorFollower = document.querySelector('.cursor-follower');
+
+        document.addEventListener('mousemove', (e) => {
+            cursor.style.left = e.clientX + 'px';
+            cursor.style.top = e.clientY + 'px';
+            
+            gsap.to(cursorFollower, {
+                duration: 0.5,
+                left: e.clientX,
+                top: e.clientY
+            });
+        });
+
+        document.addEventListener('mousedown', () => {
+            cursor.style.transform = 'scale(0.8)';
+            cursorFollower.style.transform = 'scale(1.2)';
+        });
+
+        document.addEventListener('mouseup', () => {
+            cursor.style.transform = 'scale(1)';
+            cursorFollower.style.transform = 'scale(1)';
+        });
+
+        // Effet de hover sur les liens
+        document.querySelectorAll('a, button, .skill, .service-card, .project-card').forEach(el => {
+            el.addEventListener('mouseenter', () => {
+                cursor.style.transform = 'scale(1.5)';
+                cursor.style.background = 'var(--neon-pink)';
+                cursorFollower.style.transform = 'scale(1.5)';
+                cursorFollower.style.borderColor = 'var(--neon-pink)';
+            });
+            
+            el.addEventListener('mouseleave', () => {
+                cursor.style.transform = 'scale(1)';
+                cursor.style.background = 'var(--neon-blue)';
+                cursorFollower.style.transform = 'scale(1)';
+                cursorFollower.style.borderColor = 'var(--neon-blue)';
+            });
+        });
+
+        // Effet de frappe pour le texte
+        const typed = new Typed('.typing-text', {
+            strings: [
+                "Nous transformons vos idées en expériences digitales immersives",
+                "Créateurs d'interfaces innovantes et de solutions web sur mesure",
+                "Experts en développement front-end et expérience utilisateur"
+            ],
+            typeSpeed: 50,
+            backSpeed: 30,
+            backDelay: 2000,
+            startDelay: 1000,
+            loop: true
+        });
+
+        // Menu mobile
+        document.querySelector('.menu-toggle').addEventListener('click', function() {
+            document.querySelector('.nav-links').classList.toggle('active');
+            this.classList.toggle('active');
+        });
+
+        // Fermer le menu mobile en cliquant sur un lien
+        document.querySelectorAll('.nav-links a').forEach(link => {
+            link.addEventListener('click', () => {
+                document.querySelector('.nav-links').classList.remove('active');
+                document.querySelector('.menu-toggle').classList.remove('active');
+            });
+        });
+
+        // Effet de header au scroll
+        window.addEventListener('scroll', function() {
+            const header = document.querySelector('header');
+            if (window.scrollY > 100) {
+                header.style.background = 'rgba(5, 5, 16, 0.95)';
+                header.style.boxShadow = '0 5px 20px rgba(0, 0, 0, 0.2)';
+            } else {
+                header.style.background = 'rgba(10, 10, 22, 0.8)';
+                header.style.boxShadow = 'none';
+            }
+        });
+
+        // Formulaire de contact
+        document.getElementById('contactForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Animation de succès
+            gsap.to(this, {
+                duration: 0.5,
+                opacity: 0.5,
+                y: -10,
+                onComplete: () => {
+                    alert('Message envoyé ! Nous vous contacterons rapidement.');
+                    this.reset();
+                    gsap.to(this, { duration: 0.5, opacity: 1, y: 0 });
+                }
+            });
+        });
+
+        // Initialisation de Three.js après le chargement de la page
+        window.addEventListener('load', initThreeJS);
+    </script>
+</body>
+</html>

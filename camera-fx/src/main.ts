@@ -1,7 +1,6 @@
 import { Camera, CameraError } from "./core/Camera";
 import { GLRenderer, type BackgroundMode } from "./core/GLRenderer";
 import { Recorder } from "./core/Recorder";
-import { EFFECTS, findEffect } from "./effects/EffectRegistry";
 import { VisionEngine } from "./vision/VisionEngine";
 import { SegmentationEngine } from "./vision/SegmentationEngine";
 import { GestureController, type GestureAction } from "./vision/GestureController";
@@ -31,7 +30,6 @@ const recorder = new Recorder();
 const recordCanvas = document.createElement("canvas");
 const recordCtx = recordCanvas.getContext("2d")!;
 
-let currentEffectId = "raw";
 let motionEnabled = false;
 let running = false;
 let isRecording = false;
@@ -44,13 +42,6 @@ function resize(): void {
   overlayCanvas.height = glCanvas.height;
   recordCanvas.width = glCanvas.width;
   recordCanvas.height = glCanvas.height;
-}
-
-function cycleEffect(direction: 1 | -1): void {
-  const ids = EFFECTS.map((e) => e.id);
-  const idx = ids.indexOf(currentEffectId);
-  currentEffectId = ids[(idx + direction + ids.length) % ids.length];
-  controls.setActiveEffect(currentEffectId);
 }
 
 function setBackgroundMode(mode: BackgroundMode): void {
@@ -95,12 +86,6 @@ async function toggleRecording(): Promise<void> {
 
 function handleGestureAction(action: GestureAction): void {
   switch (action) {
-    case "next-effect":
-      cycleEffect(1);
-      break;
-    case "prev-effect":
-      cycleEffect(-1);
-      break;
     case "snapshot":
       takeSnapshot();
       break;
@@ -127,7 +112,7 @@ function tick(now: number): void {
     const mask = segmentation.update(videoEl, now);
     if (mask) renderer.uploadMask(mask.data, mask.width, mask.height);
   }
-  renderer.render(findEffect(currentEffectId));
+  renderer.render();
 
   overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
@@ -157,9 +142,6 @@ function tick(now: number): void {
 }
 
 const controls = new Controls({
-  onSelectEffect: (id) => {
-    currentEffectId = id;
-  },
   onToggleVision: (kind: VisionToggleKind, enabled: boolean) => {
     if (kind === "motion") {
       motionEnabled = enabled;
@@ -233,7 +215,7 @@ function takeSnapshot(): void {
   ctx.drawImage(overlayCanvas, 0, 0);
 
   const link = document.createElement("a");
-  link.download = `argus-${currentEffectId}-${Date.now()}.png`;
+  link.download = `argus-${Date.now()}.png`;
   link.href = composite.toDataURL("image/png");
   link.click();
 }

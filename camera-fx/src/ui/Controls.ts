@@ -1,10 +1,8 @@
-import { EFFECTS } from "../effects/EffectRegistry";
 import type { BackgroundMode } from "../core/GLRenderer";
 
 export type VisionToggleKind = "face" | "hands" | "motion";
 
 export interface ControlsCallbacks {
-  onSelectEffect: (id: string) => void;
   onToggleVision: (kind: VisionToggleKind, enabled: boolean) => void;
   onSelectBackground: (mode: BackgroundMode) => void;
   onBackgroundImageFile: (file: File) => void;
@@ -31,7 +29,6 @@ const BACKGROUND_MODES: { mode: BackgroundMode; label: string }[] = [
  * no camera/GL/vision logic lives here.
  */
 export class Controls {
-  private readonly effectGroup = document.getElementById("effect-group")!;
   private readonly visionGroup = document.getElementById("vision-group")!;
   private readonly backgroundGroup = document.getElementById("background-group")!;
   private readonly snapshotBtn = document.getElementById("btn-snapshot")! as HTMLButtonElement;
@@ -44,12 +41,10 @@ export class Controls {
   private readonly fpsBadge = document.getElementById("fps-badge")!;
   private readonly gestureBadge = document.getElementById("gesture-badge")!;
 
-  private effectButtons = new Map<string, HTMLButtonElement>();
   private toggleButtons = new Map<VisionToggleKind, HTMLButtonElement>();
   private backgroundButtons = new Map<BackgroundMode, HTMLButtonElement>();
 
   constructor(private readonly callbacks: ControlsCallbacks) {
-    this.buildEffectButtons();
     this.buildVisionToggles();
     this.buildBackgroundButtons();
 
@@ -65,20 +60,6 @@ export class Controls {
       this.spinner.classList.add("show");
       this.statusText.textContent = "Requesting camera access…";
       this.callbacks.onStart();
-    });
-  }
-
-  private buildEffectButtons(): void {
-    EFFECTS.forEach((effect, i) => {
-      const btn = document.createElement("button");
-      btn.textContent = effect.label;
-      btn.className = i === 0 ? "active" : "";
-      btn.addEventListener("click", () => {
-        this.setActiveEffect(effect.id);
-        this.callbacks.onSelectEffect(effect.id);
-      });
-      this.effectGroup.appendChild(btn);
-      this.effectButtons.set(effect.id, btn);
     });
   }
 
@@ -112,12 +93,6 @@ export class Controls {
       });
       this.backgroundGroup.appendChild(btn);
       this.backgroundButtons.set(mode, btn);
-    }
-  }
-
-  setActiveEffect(id: string): void {
-    for (const [effectId, btn] of this.effectButtons) {
-      btn.classList.toggle("active", effectId === id);
     }
   }
 

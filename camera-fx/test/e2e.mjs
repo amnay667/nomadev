@@ -1,7 +1,8 @@
 // End-to-end smoke test: drives the built app in real Chromium against a
 // synthetic fake camera device (see generate-fake-camera.mjs) and asserts
-// every shader effect actually renders a non-uniform frame, vision toggles
-// don't crash the app even when the MediaPipe CDN is unreachable, and the
+// the live feed actually renders a non-uniform frame, vision toggles don't
+// crash the app even when the MediaPipe CDN is unreachable, background
+// modes composite correctly, recording produces a real download, and the
 // snapshot action doesn't throw.
 //
 // Usage:
@@ -14,8 +15,6 @@ import path from "node:path";
 const FAKE_VIDEO = process.argv[2] ?? "test/fixtures/fake-cam.y4m";
 const PORT = process.env.E2E_PORT ?? "4173";
 const CHROMIUM_PATH = process.env.PLAYWRIGHT_CHROMIUM_PATH; // optional override
-
-const EFFECT_IDS = ["raw", "edge", "thermal", "ascii", "glitch", "kaleidoscope", "nightvision"];
 
 function waitForServer(url, timeoutMs = 20000) {
   const start = Date.now();
@@ -94,13 +93,9 @@ async function main() {
     console.log("camera started");
     await page.waitForTimeout(500);
 
-    const results = {};
-    const effectButtons = await page.$$("#effect-group button");
-    for (let i = 0; i < EFFECT_IDS.length; i++) {
-      await effectButtons[i].click();
-      await page.waitForTimeout(450);
-      results[EFFECT_IDS[i]] = await sampleCanvasStats(page);
-    }
+    const feedStats = await sampleCanvasStats(page);
+    console.log(`live feed render check: mean=${feedStats.mean.toFixed(1)} stddev=${feedStats.stddev.toFixed(1)}`);
+    const feedOk = feedStats.stddev >= 1.0;
 
     const toggleButtons = await page.$$("#vision-group button");
     for (const btn of toggleButtons) {
@@ -130,12 +125,11 @@ async function main() {
     // MediaPipe CDN, which may or may not be reachable from this sandbox,
     // and if it IS reachable it would otherwise overwrite our synthetic
     // mask every frame) and feed a hand-built mask that is foreground on
-    // the raw-camera-space left half, background on the right half.
-    // Effect is pinned to "raw" so the foreground is unambiguous video,
-    // not a colour-tinted shader. If the mirrored-vs-screen-space uv
-    // bookkeeping in GLRenderer is correct, the composited foreground
-    // (video) should show up on the *right* side of the screen (since the
-    // feed is mirrored) and the green background should show on the *left*.
+    // the raw-camera-space left half, background on the right half. If the
+    // mirrored-vs-screen-space uv bookkeeping in GLRenderer is correct, the
+    // composited foreground (video) should show up on the *right* side of
+    // the screen (since the feed is mirrored) and the green background
+    // should show on the *left*.
     console.log("\n=== mask alignment check ===");
     const diag = await page.evaluate(() => {
       const w = 64,
@@ -149,11 +143,9 @@ async function main() {
       const argus = window.__argus;
       const segStatusBefore = argus.segmentation.status;
       argus.freezeSegmentation(true);
-      // pin a plain, unambiguous effect for this check
-      document.querySelectorAll("#effect-group button")[0].click();
       argus.setBackgroundMode("color");
       argus.uploadTestMask(mask, w, h);
-      return { segStatusBefore, hookPresent: true };
+      return { segStatusBefore };
     });
     console.log("segmentation model status:", diag.segStatusBefore);
     await page.waitForTimeout(250);
@@ -209,12 +201,8 @@ async function main() {
     await browser.close();
 
     let ok = true;
-    console.log("\n=== effect render check ===");
-    for (const [id, stats] of Object.entries(results)) {
-      const pass = stats.stddev >= 1.0;
-      console.log(`${pass ? "OK  " : "FAIL"} ${id.padEnd(14)} mean=${stats.mean.toFixed(1)} stddev=${stats.stddev.toFixed(1)}`);
-      if (!pass) ok = false;
-    }
+    console.log(`\n${feedOk ? "OK  " : "FAIL"} live feed renders a non-uniform frame`);
+    if (!feedOk) ok = false;
     if (!maskAligned) ok = false;
     if (!recordingOk) ok = false;
     if (unexpectedErrors.length > 0) {

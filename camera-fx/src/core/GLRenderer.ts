@@ -1,3 +1,4 @@
+import passthroughSrc from "../shaders/passthrough.frag.glsl?raw";
 import blurHSrc from "../shaders/blur-h.frag.glsl?raw";
 import blurVSrc from "../shaders/blur-v.frag.glsl?raw";
 import compositeSrc from "../shaders/composite.frag.glsl?raw";
@@ -7,9 +8,9 @@ import compositeSrc from "../shaders/composite.frag.glsl?raw";
 // so the mirror gets applied at first use.
 // vScreenUv: raw, unflipped screen-fraction uv -- use this to sample any
 // texture that is itself the output of an earlier pass in *this* pipeline
-// (an effect render-target, a blur pass, uPrevFrame), since that content
-// was already written out in screen-space addressing. Mixing these up
-// causes a second, unwanted horizontal flip.
+// (a render-target, a blur pass), since that content was already written
+// out in screen-space addressing. Mixing these up causes a second,
+// unwanted horizontal flip.
 const VERTEX_SHADER = `#version 300 es
 out vec2 vUv;
 out vec2 vScreenUv;
@@ -22,13 +23,9 @@ void main() {
 
 export type UniformValue = number | [number, number] | [number, number, number] | [number, number, number, number];
 
-export interface EffectDef {
+interface ShaderPass {
   id: string;
-  label: string;
-  /** GLSL ES 3.00 fragment shader body (no #version/precision/in/out boilerplate needed if using `fragmentSource`). */
   fragmentSource: string;
-  /** Optional per-frame extra uniforms (beyond the built-ins every shader gets). */
-  uniforms?: Record<string, UniformValue>;
 }
 
 export type BackgroundMode = "off" | "blur" | "color" | "image";
@@ -49,23 +46,20 @@ interface RenderOptions {
   extraUniforms?: Record<string, UniformValue>;
 }
 
+const PASSTHROUGH: ShaderPass = { id: "passthrough", fragmentSource: passthroughSrc };
+
 /**
- * WebGL2 renderer with a rolling "previous frame" feedback texture (so any
- * effect can do trails/datamoshing/motion-blur just by sampling
- * `uPrevFrame`) plus an optional second stage: render the selected effect
- * to an offscreen target, derive a background layer (blurred video / solid
- * colour / replacement image), and composite the two using a live
- * person-segmentation mask. That second stage only runs when a background
- * mode is active, so the common case (no background effect) stays a single
- * draw call straight to the canvas.
+ * WebGL2 renderer for the live camera feed. The common path is a single
+ * draw call straight to the canvas; when a background mode is active it
+ * renders the feed to an offscreen target, derives a background layer
+ * (blurred video / solid colour / replacement image), and composites the
+ * two using a live person-segmentation mask.
  */
 export class GLRenderer {
   readonly gl: WebGL2RenderingContext;
   private readonly canvas: HTMLCanvasElement;
   private readonly programs = new Map<string, CompiledProgram>();
   private readonly videoTexture: WebGLTexture;
-  private prevFrameTexture: WebGLTexture;
-  private startTime = performance.now();
   private vao: WebGLVertexArrayObject;
 
   private effectTarget: RenderTarget | null = null;
@@ -97,14 +91,13 @@ export class GLRenderer {
     gl.bindVertexArray(this.vao);
 
     this.videoTexture = this.createTexture();
-    this.prevFrameTexture = this.createTexture();
     this.maskTexture = this.createTexture();
     this.bgImageTexture = this.createTexture();
     this.solidColorTexture = this.createTexture();
     this.setBackgroundColor(0.02, 0.85, 0.4);
 
     // Sampling a texture with no allocated storage is undefined behaviour.
-    // Default the mask to "fully foreground" (255) so the effect renders
+    // Default the mask to "fully foreground" (255) so the feed renders
     // normally until a real segmentation mask arrives, and default the
     // replacement-background image to a neutral fill until one is uploaded.
     gl.bindTexture(gl.TEXTURE_2D, this.maskTexture);
@@ -168,10 +161,6 @@ export class GLRenderer {
     this.canvas.width = w;
     this.canvas.height = h;
     this.gl.viewport(0, 0, w, h);
-    // Reset the feedback texture to the new size (avoids stretched garbage).
-    const gl = this.gl;
-    gl.bindTexture(gl.TEXTURE_2D, this.prevFrameTexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
   }
 
   private compile(id: string, fragmentBody: string): CompiledProgram {
@@ -284,11 +273,6 @@ export class GLRenderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.maskTexture, 0);
     const px = new Uint8Array(4);
-    // maskTexture may be any size; readPixels needs an integer coordinate,
-    // so figure out its size via TEXTURE_WIDTH/HEIGHT query is unavailable
-    // on the texture directly -- instead this relies on the caller knowing
-    // the mask's own resolution and passing already-scaled integer coords
-    // via u,v (here reused as pixel x,y for simplicity).
     gl.readPixels(u, v, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
     const glError = gl.getError();
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -296,9 +280,9 @@ export class GLRenderer {
     return { value: px[0], glError };
   }
 
-  private renderEffect(effect: EffectDef, opts: RenderOptions = {}): void {
+  private renderPass(pass: ShaderPass, opts: RenderOptions = {}): void {
     const gl = this.gl;
-    const compiled = this.compile(effect.id, effect.fragmentSource);
+    const compiled = this.compile(pass.id, pass.fragmentSource);
     gl.useProgram(compiled.program);
     gl.bindVertexArray(this.vao);
     gl.bindFramebuffer(gl.FRAMEBUFFER, opts.target?.fbo ?? null);
@@ -308,16 +292,9 @@ export class GLRenderer {
     gl.bindTexture(gl.TEXTURE_2D, opts.sourceTexture ?? this.videoTexture);
     this.setSamplerUniform(compiled, "uTexture", 0);
 
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.prevFrameTexture);
-    this.setSamplerUniform(compiled, "uPrevFrame", 1);
-
     this.setUniform(compiled, "uResolution", [this.canvas.width, this.canvas.height]);
-    this.setUniform(compiled, "uTime", (performance.now() - this.startTime) / 1000);
+    this.setUniform(compiled, "uTime", performance.now() / 1000);
 
-    for (const [key, value] of Object.entries(effect.uniforms ?? {})) {
-      this.setUniform(compiled, key, value);
-    }
     if (opts.extraUniforms) {
       for (const [key, value] of Object.entries(opts.extraUniforms)) {
         this.setUniform(compiled, key, value);
@@ -352,10 +329,10 @@ export class GLRenderer {
   }
 
   private renderBlurredBackground(): WebGLTexture {
-    const compiledH: EffectDef = { id: "internal:blur-h", label: "", fragmentSource: blurHSrc };
-    const compiledV: EffectDef = { id: "internal:blur-v", label: "", fragmentSource: blurVSrc };
-    this.renderEffect(compiledH, { target: this.blurTargetA!, extraUniforms: { uRadius: this.blurRadius } });
-    this.renderEffect(compiledV, {
+    const passH: ShaderPass = { id: "internal:blur-h", fragmentSource: blurHSrc };
+    const passV: ShaderPass = { id: "internal:blur-v", fragmentSource: blurVSrc };
+    this.renderPass(passH, { target: this.blurTargetA!, extraUniforms: { uRadius: this.blurRadius } });
+    this.renderPass(passV, {
       target: this.blurTargetB!,
       sourceTexture: this.blurTargetA!.texture,
       extraUniforms: { uRadius: this.blurRadius },
@@ -363,23 +340,15 @@ export class GLRenderer {
     return this.blurTargetB!.texture;
   }
 
-  private captureFeedback(): void {
-    const gl = this.gl;
-    gl.bindTexture(gl.TEXTURE_2D, this.prevFrameTexture);
-    gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 0, 0, this.canvas.width, this.canvas.height, 0);
-  }
-
-  /** Renders the selected shader effect, applying background segmentation compositing if active. */
-  render(effect: EffectDef, extraUniforms?: Record<string, UniformValue>): void {
+  /** Renders the live camera feed, applying background segmentation compositing if active. */
+  render(): void {
     if (this.backgroundMode === "off") {
-      this.renderEffect(effect, { extraUniforms });
-      this.captureFeedback();
+      this.renderPass(PASSTHROUGH);
       return;
     }
 
     this.ensureOffscreenTargets();
-    this.renderEffect(effect, { target: this.effectTarget!, extraUniforms });
-    this.captureFeedback();
+    this.renderPass(PASSTHROUGH, { target: this.effectTarget! });
 
     const backgroundTexture =
       this.backgroundMode === "blur"

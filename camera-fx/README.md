@@ -1,24 +1,20 @@
 # Argus — Live Camera Vision Engine
 
-A real-time, fully client-side computer-vision playground for your webcam.
-Everything — the shader effects, the face mesh, the hand tracking — runs
-as WebGL2 + WASM/GPU inference inside your browser tab. No frame, image,
-or landmark is ever sent to a server; the camera stream never leaves
-`localhost` (or wherever you deploy the static build).
+A real-time, fully client-side virtual camera. Background segmentation,
+face mesh, hand/gesture tracking, and recording all run as WebGL2 +
+WASM/GPU inference inside your browser tab. No frame, image, or landmark
+is ever sent to a server; the camera stream never leaves `localhost` (or
+wherever you deploy the static build).
 
 ## What it does
 
-- **GLSL shader pipeline** (`src/shaders/*.glsl`) — six full-screen fragment
-  shaders sample the live camera texture each frame:
-  - `Edge Scan` — Sobel-operator edge detection with a cyan/magenta scanner palette.
-  - `Thermal` — false-color FLIR-style palette with a soft blur and sensor grain.
-  - `ASCII` — every effect renders in real time; ASCII is entirely
-    procedural (signed-distance "glyphs" drawn from math, no font texture).
-  - `Datamosh` — row-tearing, chromatic aberration, and a feedback texture
-    that lets some rows "fail to update," mimicking corrupted P-frames.
-  - `Kaleidoscope` — radial mirror-segmented sampling with a slow rotation.
-  - `Night Vision` — cheap multi-tap bloom, green monochrome, grain, and a
-    rolling scanline sweep behind a scope-style vignette.
+- **Background segmentation** (`src/vision/SegmentationEngine.ts`,
+  composited in `GLRenderer`) — MediaPipe's selfie-segmentation model
+  produces a live person-confidence mask; the camera feed is rendered
+  offscreen and composited against a background layer using that mask, so
+  you get a real virtual-background: Off / **Blur** (two-pass separable
+  Gaussian) / **Green Screen** (solid colour) / **Replace** (any image you
+  upload, cover-fit cropped to the frame).
 
 - **On-device vision** (`src/vision/VisionEngine.ts`,
   `src/overlay/VisionOverlay.ts`) — [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker)
@@ -33,26 +29,15 @@ or landmark is ever sent to a server; the camera stream never leaves
   - Model + WASM assets are fetched once from a CDN and cached by the
     browser; inference itself never touches the network. If the assets
     can't be reached (offline, blocked network), the app fails soft — the
-    shader pipeline keeps working and the vision toggles just disable
+    live feed keeps working and the vision toggles just disable
     themselves instead of crashing.
-
-- **Background segmentation** (`src/vision/SegmentationEngine.ts`,
-  composited in `GLRenderer`) — MediaPipe's selfie-segmentation model
-  produces a live person-confidence mask; the currently-selected shader
-  effect is rendered offscreen and composited against a background layer
-  using that mask, so you get a real virtual-background: Off / **Blur**
-  (two-pass separable Gaussian) / **Green Screen** (solid colour) /
-  **Replace** (any image you upload, cover-fit cropped to the frame). The
-  foreground still runs through whichever shader effect is selected, so
-  "Thermal you" against a blurred office is one click away.
 
 - **Gesture control** (`src/vision/GestureController.ts`) — with Hand
   Trails enabled, canned gestures drive the app hands-free, edge-triggered
   (must be held ~400ms, and released before re-firing, so a pinned pose
-  doesn't spam actions): ✌️ Victory → next effect, ☝️ Pointing_Up → previous
-  effect, 🖐️ Open_Palm → snapshot, 👍 Thumb_Up → cycle background mode,
-  ✊ Closed_Fist → start/stop recording. A HUD badge shows the currently
-  recognized gesture.
+  doesn't spam actions): 🖐️ Open_Palm → snapshot, 👍 Thumb_Up → cycle
+  background mode, ✊ Closed_Fist → start/stop recording. A HUD badge shows
+  the currently recognized gesture.
 
 - **Motion Energy** (`src/overlay/MotionEnergy.ts`) — a from-scratch
   48×27 grid frame-differencing field (no model, just luminance diffing +
@@ -60,7 +45,7 @@ or landmark is ever sent to a server; the camera stream never leaves
   is changing. No model dependency, so it works even if the MediaPipe CDN
   is unreachable.
 
-- **Snapshot & Recording** — Snapshot composites the shader canvas and the
+- **Snapshot & Recording** — Snapshot composites the video canvas and the
   vision/particle overlay canvas together and downloads a PNG. Recording
   (`src/core/Recorder.ts`) does the same compositing continuously via
   `canvas.captureStream()` + `MediaRecorder`, downloading a `.webm` clip
@@ -73,14 +58,11 @@ src/
   core/
     Camera.ts        getUserMedia wrapper, friendly permission-error messages
     GLRenderer.ts     WebGL2 renderer: single fullscreen triangle, program
-                      cache, video texture upload, "previous frame" feedback
-                      texture, offscreen render-targets + composite pass for
-                      background segmentation
+                      cache, video texture upload, offscreen render-targets
+                      + composite pass for background segmentation
     Recorder.ts       MediaRecorder wrapper over a canvas captureStream()
-  shaders/            one self-contained GLSL ES 3.00 fragment shader per effect,
-                      plus blur-h/blur-v/composite for background compositing
-  effects/
-    EffectRegistry.ts maps shader source -> { id, label } effect definitions
+  shaders/            passthrough.frag.glsl (video -> canvas) plus
+                      blur-h/blur-v/composite for background compositing
   vision/
     VisionEngine.ts   MediaPipe FaceLandmarker + GestureRecognizer, lazy init,
                       fails soft if models/network are unavailable
@@ -102,27 +84,19 @@ src/
 
 Design choices worth calling out:
 
-- **Mirrored "selfie" view.** The vertex shader flips `vUv.x` once, so every
-  shader automatically renders mirrored. Landmark coordinates from MediaPipe
+- **Mirrored "selfie" view.** The vertex shader flips `vUv.x` once, so the
+  feed automatically renders mirrored. Landmark coordinates from MediaPipe
   are in the *raw*, unmirrored video frame, so the overlay mirrors them
   (`x -> 1 - x`) before drawing/spawning particles, keeping the mesh and
   the fingertip trails in perfect registration with what you see.
-- **One texture upload per frame, one draw call per effect.** All shaders
-  share the same fullscreen-triangle vertex shader (no vertex buffers at
-  all — positions come from `gl_VertexID`), and a program cache avoids
-  recompiling on every effect switch.
-- **Feedback texture, not multi-pass ping-pong.** After every draw, the
-  currently-bound framebuffer is copied into `uPrevFrame` via
-  `copyTexImage2D`. Any shader can opt into trailing/datamosh behavior just
-  by sampling it — no render-target plumbing needed for the common case.
 - **Two UV spaces, on purpose.** The vertex shader emits both `vUv`
   (mirrored, camera-space -- for sampling the raw video texture or the
   segmentation mask, which are fresh/un-mirrored inputs) and `vScreenUv`
   (unflipped, screen-space -- for sampling anything that's itself the
-  *output* of an earlier pass in this pipeline: an effect render-target, a
-  blur pass, `uPrevFrame`). Mixing these up flips the sampled content
-  relative to what should be on screen; see the comments at the top of
-  `GLRenderer.ts` and `composite.frag.glsl` for the full reasoning.
+  *output* of an earlier pass in this pipeline: the video render-target, a
+  blur pass). Mixing these up flips the sampled content relative to what
+  should be on screen; see the comments at the top of `GLRenderer.ts` and
+  `composite.frag.glsl` for the full reasoning.
 - **Sampler uniforms need `uniform1i`, not `uniform1f`.** Setting a
   `sampler2D` uniform with the float setter is a type mismatch WebGL
   silently rejects (`INVALID_OPERATION`, uniform left unchanged) -- easy to
@@ -153,7 +127,7 @@ that's a browser security requirement, not specific to this app.
 skin-tone "face" blob with eyes/mouth over a shifting gradient — no ffmpeg
 or external assets needed) and `test/e2e.mjs` drives a real headless
 Chromium against it via `--use-file-for-fake-video-capture`, exercising
-every shader effect, the vision toggles, and the snapshot action:
+the live feed, vision toggles, every background mode, and recording:
 
 ```bash
 npm run build
@@ -161,11 +135,11 @@ npm run test:e2e:fixture   # writes test/fixtures/fake-cam.y4m (gitignored)
 npm run test:e2e           # builds a preview server + drives Chromium against it
 ```
 
-The test asserts each shader effect actually renders a non-uniform frame
-(via per-effect luminance mean/stddev), exercises every background mode
-and the recording flow, and fails on any unexpected console/page error —
-network errors from the MediaPipe CDN being unreachable are treated as
-expected soft-failure noise, not a test failure.
+The test asserts the live feed actually renders a non-uniform frame,
+exercises every background mode and the recording flow, and fails on any
+unexpected console/page error — network errors from the MediaPipe CDN
+being unreachable are treated as expected soft-failure noise, not a test
+failure.
 
 Background compositing correctness (the mirrored-vs-screen-space UV
 bookkeeping) is checked without depending on the segmentation model

@@ -1,8 +1,6 @@
-export type GestureAction = "next-effect" | "prev-effect" | "snapshot" | "cycle-background" | "toggle-recording";
+export type GestureAction = "snapshot" | "cycle-background" | "toggle-recording";
 
 const GESTURE_ACTIONS: Record<string, GestureAction> = {
-  Victory: "next-effect",
-  Pointing_Up: "prev-effect",
   Open_Palm: "snapshot",
   Thumb_Up: "cycle-background",
   Closed_Fist: "toggle-recording",

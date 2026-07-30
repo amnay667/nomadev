@@ -6,6 +6,8 @@ export interface ControlsCallbacks {
   onToggleVision: (kind: VisionToggleKind, enabled: boolean) => void;
   onSelectBackground: (mode: BackgroundMode) => void;
   onBackgroundImageFile: (file: File) => void;
+  onSelectDrawColor: (color: string) => void;
+  onClearDrawing: () => void;
   onSnapshot: () => void;
   onToggleRecord: () => void;
   onStart: () => void;
@@ -24,6 +26,8 @@ const BACKGROUND_MODES: { mode: BackgroundMode; label: string }[] = [
   { mode: "image", label: "🖼 Replace…" },
 ];
 
+const DRAW_COLORS = ["#5eead4", "#f472b6", "#facc15", "#f8fafc", "#38bdf8"];
+
 /**
  * Owns all DOM wiring for the control panel + start screen. Pure UI glue —
  * no camera/GL/vision logic lives here.
@@ -31,6 +35,8 @@ const BACKGROUND_MODES: { mode: BackgroundMode; label: string }[] = [
 export class Controls {
   private readonly visionGroup = document.getElementById("vision-group")!;
   private readonly backgroundGroup = document.getElementById("background-group")!;
+  private readonly drawGroup = document.getElementById("draw-group")!;
+  private readonly drawClearBtn = document.getElementById("btn-draw-clear")! as HTMLButtonElement;
   private readonly snapshotBtn = document.getElementById("btn-snapshot")! as HTMLButtonElement;
   private readonly recordBtn = document.getElementById("btn-record")! as HTMLButtonElement;
   private readonly bgImageInput = document.getElementById("bg-image-input")! as HTMLInputElement;
@@ -43,11 +49,14 @@ export class Controls {
 
   private toggleButtons = new Map<VisionToggleKind, HTMLButtonElement>();
   private backgroundButtons = new Map<BackgroundMode, HTMLButtonElement>();
+  private colorButtons = new Map<string, HTMLButtonElement>();
 
   constructor(private readonly callbacks: ControlsCallbacks) {
     this.buildVisionToggles();
     this.buildBackgroundButtons();
+    this.buildDrawColorButtons();
 
+    this.drawClearBtn.addEventListener("click", () => this.callbacks.onClearDrawing());
     this.snapshotBtn.addEventListener("click", () => this.callbacks.onSnapshot());
     this.recordBtn.addEventListener("click", () => this.callbacks.onToggleRecord());
     this.bgImageInput.addEventListener("change", () => {
@@ -93,6 +102,27 @@ export class Controls {
       });
       this.backgroundGroup.appendChild(btn);
       this.backgroundButtons.set(mode, btn);
+    }
+  }
+
+  private buildDrawColorButtons(): void {
+    DRAW_COLORS.forEach((color, i) => {
+      const btn = document.createElement("button");
+      btn.className = i === 0 ? "swatch active" : "swatch";
+      btn.style.background = color;
+      btn.title = color;
+      btn.addEventListener("click", () => {
+        this.setActiveDrawColor(color);
+        this.callbacks.onSelectDrawColor(color);
+      });
+      this.drawGroup.insertBefore(btn, this.drawClearBtn);
+      this.colorButtons.set(color, btn);
+    });
+  }
+
+  setActiveDrawColor(color: string): void {
+    for (const [c, btn] of this.colorButtons) {
+      btn.classList.toggle("active", c === color);
     }
   }
 

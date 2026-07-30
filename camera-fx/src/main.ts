@@ -6,12 +6,14 @@ import { SegmentationEngine } from "./vision/SegmentationEngine";
 import { GestureController, type GestureAction } from "./vision/GestureController";
 import { VisionOverlay } from "./overlay/VisionOverlay";
 import { MotionEnergy } from "./overlay/MotionEnergy";
+import { AirDraw } from "./overlay/AirDraw";
 import { FPSCounter } from "./utils/FPSCounter";
 import { Controls, type VisionToggleKind } from "./ui/Controls";
 
 const videoEl = document.getElementById("source") as HTMLVideoElement;
 const glCanvas = document.getElementById("gl-canvas") as HTMLCanvasElement;
 const overlayCanvas = document.getElementById("overlay-canvas") as HTMLCanvasElement;
+const drawCanvas = document.getElementById("draw-canvas") as HTMLCanvasElement;
 const stage = glCanvas.parentElement as HTMLElement;
 const overlayCtx = overlayCanvas.getContext("2d")!;
 
@@ -22,6 +24,7 @@ const segmentation = new SegmentationEngine();
 const gestureController = new GestureController();
 const visionOverlay = new VisionOverlay();
 const motionEnergy = new MotionEnergy();
+const airDraw = new AirDraw(drawCanvas);
 const fps = new FPSCounter();
 const recorder = new Recorder();
 
@@ -40,6 +43,13 @@ function resize(): void {
   renderer.resize(rect.width, rect.height);
   overlayCanvas.width = glCanvas.width;
   overlayCanvas.height = glCanvas.height;
+  // Resizing a canvas clears it, and drawCanvas holds persistent ink -- only
+  // touch it when the size actually changed, so redundant resize() calls
+  // (e.g. a spurious window "resize" event) don't wipe a drawing.
+  if (drawCanvas.width !== glCanvas.width || drawCanvas.height !== glCanvas.height) {
+    drawCanvas.width = glCanvas.width;
+    drawCanvas.height = glCanvas.height;
+  }
   recordCanvas.width = glCanvas.width;
   recordCanvas.height = glCanvas.height;
 }
@@ -95,6 +105,9 @@ function handleGestureAction(action: GestureAction): void {
     case "toggle-recording":
       void toggleRecording();
       break;
+    case "clear-drawing":
+      airDraw.clear();
+      break;
   }
 }
 
@@ -126,6 +139,7 @@ function tick(now: number): void {
     visionOverlay.render(overlayCtx, frame, overlayCanvas.width, overlayCanvas.height, timeSec, dt);
 
     if (vision.handsEnabled) {
+      airDraw.update(frame.handLandmarks, overlayCanvas.width, overlayCanvas.height);
       controls.setGesture(gestureController.activeGesture);
       const action = gestureController.update(frame.gestures, now);
       if (action) handleGestureAction(action);
@@ -135,6 +149,7 @@ function tick(now: number): void {
   if (isRecording) {
     recordCtx.drawImage(glCanvas, 0, 0);
     recordCtx.drawImage(overlayCanvas, 0, 0);
+    recordCtx.drawImage(drawCanvas, 0, 0);
   }
 
   fps.tick();
@@ -156,6 +171,10 @@ const controls = new Controls({
   },
   onSelectBackground: (mode) => setBackgroundMode(mode),
   onBackgroundImageFile: (file) => void loadBackgroundImage(file),
+  onSelectDrawColor: (color) => {
+    airDraw.color = color;
+  },
+  onClearDrawing: () => airDraw.clear(),
   onSnapshot: () => takeSnapshot(),
   onToggleRecord: () => void toggleRecording(),
   onStart: () => void startCamera(),
@@ -213,6 +232,7 @@ function takeSnapshot(): void {
   const ctx = composite.getContext("2d")!;
   ctx.drawImage(glCanvas, 0, 0);
   ctx.drawImage(overlayCanvas, 0, 0);
+  ctx.drawImage(drawCanvas, 0, 0);
 
   const link = document.createElement("a");
   link.download = `argus-${Date.now()}.png`;
@@ -229,6 +249,7 @@ requestAnimationFrame(tick);
 (window as unknown as { __argus: unknown }).__argus = {
   renderer,
   segmentation,
+  airDraw,
   setBackgroundMode,
   freezeSegmentation: (frozen: boolean) => {
     segmentation.enabled = !frozen;

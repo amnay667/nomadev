@@ -1,10 +1,10 @@
 # Argus — Live Camera Vision Engine
 
 A real-time, fully client-side virtual camera. Background segmentation,
-face mesh, hand/gesture tracking, and recording all run as WebGL2 +
-WASM/GPU inference inside your browser tab. No frame, image, or landmark
-is ever sent to a server; the camera stream never leaves `localhost` (or
-wherever you deploy the static build).
+face mesh, hand/gesture tracking, pinch-to-draw, and recording all run as
+WebGL2 + WASM/GPU inference inside your browser tab. No frame, image, or
+landmark is ever sent to a server; the camera stream never leaves
+`localhost` (or wherever you deploy the static build).
 
 ## What it does
 
@@ -32,12 +32,22 @@ wherever you deploy the static build).
     live feed keeps working and the vision toggles just disable
     themselves instead of crashing.
 
+- **Air Draw** (`src/overlay/AirDraw.ts`) — with Hand Trails enabled,
+  pinching your thumb and index finger together is "pen down": the index
+  fingertip draws a persistent ink trail (a real `<canvas>` layer that
+  nothing clears each frame, unlike the particle/mesh overlay) until you
+  release the pinch. Pinch detection is scale-invariant — the thumb/index
+  distance is measured as a fraction of the hand's own size (wrist to
+  middle-knuckle), so it works whether your hand is close to or far from
+  the camera. Pick a colour from the swatches or clear the canvas from the
+  Draw panel (or hands-free, see below).
+
 - **Gesture control** (`src/vision/GestureController.ts`) — with Hand
   Trails enabled, canned gestures drive the app hands-free, edge-triggered
   (must be held ~400ms, and released before re-firing, so a pinned pose
   doesn't spam actions): 🖐️ Open_Palm → snapshot, 👍 Thumb_Up → cycle
-  background mode, ✊ Closed_Fist → start/stop recording. A HUD badge shows
-  the currently recognized gesture.
+  background mode, ✊ Closed_Fist → start/stop recording, ✌️ Victory →
+  clear the drawing. A HUD badge shows the currently recognized gesture.
 
 - **Motion Energy** (`src/overlay/MotionEnergy.ts`) — a from-scratch
   48×27 grid frame-differencing field (no model, just luminance diffing +
@@ -73,6 +83,7 @@ src/
                       fingertip particles
     ParticleSystem.ts generic 2D particle physics + additive-blend rendering
     MotionEnergy.ts   frame-differencing motion field
+    AirDraw.ts        persistent pinch-to-draw ink layer
   ui/
     Controls.ts       all DOM wiring for the control panel / start screen
   utils/

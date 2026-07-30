@@ -183,6 +183,54 @@ async function main() {
     await page.evaluate(() => window.__argus.setBackgroundMode("off"));
     await page.waitForTimeout(150);
 
+    // Air-draw check: bypass the (network-gated) real hand-tracking model
+    // via the debug hook and feed synthetic 21-point hand landmarks that
+    // pinch (thumb tip + index tip close together, scaled by hand size)
+    // across two frames, then confirm ink actually landed on draw-canvas.
+    console.log("\n=== air draw check ===");
+    const drawResult = await page.evaluate(() => {
+      const c = document.getElementById("draw-canvas");
+      const mkHand = (thumbX, indexX) => {
+        const lm = Array.from({ length: 21 }, () => ({ x: 0, y: 0, z: 0, visibility: 1 }));
+        lm[0] = { x: 0.5, y: 0.8, z: 0, visibility: 1 }; // wrist
+        lm[9] = { x: 0.5, y: 0.6, z: 0, visibility: 1 }; // middle MCP (hand-size reference)
+        lm[4] = { x: thumbX, y: 0.5, z: 0, visibility: 1 }; // thumb tip
+        lm[8] = { x: indexX, y: 0.5, z: 0, visibility: 1 }; // index tip (the "pen")
+        return lm;
+      };
+      const argus = window.__argus;
+      argus.airDraw.clear();
+      argus.airDraw.color = "#ff00ff";
+      // Two pinched frames, index tip moving left-to-right (in landmark
+      // space), so a stroke gets drawn between them. Both index-tip
+      // landmarks sit at y=0.5, so the stroke is a horizontal segment.
+      const indexX1 = 0.5;
+      const indexX2 = 0.6;
+      argus.airDraw.update([mkHand(0.48, indexX1)], c.width, c.height);
+      argus.airDraw.update([mkHand(0.58, indexX2)], c.width, c.height);
+      const ctx = c.getContext("2d");
+      // Screen x is mirrored (1 - landmarkX) * width; average the two
+      // mirrored endpoints to land squarely on the drawn stroke.
+      const midX = Math.floor((((1 - indexX1) * c.width + (1 - indexX2) * c.width) / 2));
+      const midY = Math.floor(0.5 * c.height);
+      const inkPixel = ctx.getImageData(midX, midY, 1, 1).data;
+      return { inkPixel: Array.from(inkPixel) };
+    });
+    const [ir, ig, ib, ia] = drawResult.inkPixel;
+    const inkPresent = ia > 0 && ir > 100 && ib > 100 && ig < 100;
+    console.log(`ink pixel rgba(${ir},${ig},${ib},${ia})`, inkPresent ? "(magenta ink found, expected)" : "(NOT found)");
+
+    const clearedOk = await page.evaluate(() => {
+      const c = document.getElementById("draw-canvas");
+      window.__argus.airDraw.clear();
+      const ctx = c.getContext("2d");
+      const data = ctx.getImageData(0, 0, c.width, c.height).data;
+      return data.every((v, i) => (i % 4 === 3 ? v === 0 : true)); // alpha channel all zero
+    });
+    console.log(clearedOk ? "OK   clear() wipes the canvas" : "FAIL clear() left residue");
+    const airDrawOk = inkPresent && clearedOk;
+    console.log(airDrawOk ? "OK   air draw" : "FAIL air draw");
+
     // Recording must produce a downloadable file and not throw.
     console.log("\n=== recording check ===");
     let recordingOk = true;
@@ -204,6 +252,7 @@ async function main() {
     console.log(`\n${feedOk ? "OK  " : "FAIL"} live feed renders a non-uniform frame`);
     if (!feedOk) ok = false;
     if (!maskAligned) ok = false;
+    if (!airDrawOk) ok = false;
     if (!recordingOk) ok = false;
     if (unexpectedErrors.length > 0) {
       ok = false;

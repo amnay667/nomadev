@@ -55,6 +55,7 @@
     }
     #gl-canvas { z-index: 1; }
     #overlay-canvas { z-index: 2; pointer-events: none; }
+    #draw-canvas { z-index: 3; pointer-events: none; }
 
     video#source {
       position: absolute;
@@ -149,6 +150,17 @@
       font-weight: 600;
       animation: pulse 1.1s ease-in-out infinite;
     }
+    button.swatch {
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border-radius: 50%;
+      border: 2px solid var(--line);
+    }
+    button.swatch.active {
+      border-color: var(--text);
+      box-shadow: 0 0 0 2px var(--bg);
+    }
     #status {
       position: absolute;
       inset: 0;
@@ -186,6 +198,7 @@
       <video id="source" autoplay playsinline muted></video>
       <canvas id="gl-canvas" class="layer"></canvas>
       <canvas id="overlay-canvas" class="layer"></canvas>
+      <canvas id="draw-canvas" class="layer"></canvas>
 
       <div class="hud" id="hud-top">
         <div class="badge rec" id="rec-badge"><span class="dot"></span>LIVE · ON-DEVICE ONLY</div>
@@ -200,6 +213,10 @@
         <div class="group" id="background-group">
           <span class="label">Background</span>
         </div>
+        <div class="group" id="draw-group">
+          <span class="label">Draw</span>
+          <button id="btn-draw-clear">🧹 Clear</button>
+        </div>
         <div class="group" id="action-group">
           <span class="label">Capture</span>
           <button id="btn-snapshot">📸 Snapshot</button>
@@ -211,8 +228,9 @@
       <div id="status">
         <div class="spinner" id="status-spinner"></div>
         <h1>ARGUS — Live Vision Engine</h1>
-        <p id="status-text">Real-time background blur / green-screen / replace, face mesh, and hands-free gesture
-          control — all computed on-device. Nothing is ever uploaded. Click start and allow camera access.</p>
+        <p id="status-text">Real-time background blur / green-screen / replace, face mesh, pinch-to-draw, and
+          hands-free gesture control — all computed on-device. Nothing is ever uploaded. Click start and allow
+          camera access.</p>
         <button id="btn-start">▶ Start Camera</button>
       </div>
     </div>

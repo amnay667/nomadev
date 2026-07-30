@@ -1,9 +1,10 @@
-export type GestureAction = "snapshot" | "cycle-background" | "toggle-recording";
+export type GestureAction = "snapshot" | "cycle-background" | "toggle-recording" | "clear-drawing";
 
 const GESTURE_ACTIONS: Record<string, GestureAction> = {
   Open_Palm: "snapshot",
   Thumb_Up: "cycle-background",
   Closed_Fist: "toggle-recording",
+  Victory: "clear-drawing",
 };
 
 // How long a gesture must be held before it fires (filters single-frame noise).

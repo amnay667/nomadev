@@ -2,6 +2,7 @@
 precision highp float;
 
 in vec2 vUv;
+in vec2 vScreenUv;
 out vec4 outColor;
 
 uniform sampler2D uTexture;
@@ -36,7 +37,7 @@ void main() {
   // previous frame instead of the fresh one, like a corrupted P-frame.
   float moshRoll = rand(vec2(rowId * 1.7, floor(uTime * 2.5)));
   float moshAmt = smoothstep(0.90, 0.99, moshRoll);
-  vec3 prev = texture(uPrevFrame, vUv).rgb;
+  vec3 prev = texture(uPrevFrame, vScreenUv).rgb;
   vec3 col = mix(cur, prev, moshAmt);
 
   // Scanlines + faint rolling brightness bar.

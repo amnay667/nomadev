@@ -1,9 +1,9 @@
 import {
   FilesetResolver,
   FaceLandmarker,
-  HandLandmarker,
+  GestureRecognizer,
   type FaceLandmarkerResult,
-  type HandLandmarkerResult,
+  type GestureRecognizerResult,
   type NormalizedLandmark,
 } from "@mediapipe/tasks-vision";
 
@@ -14,8 +14,8 @@ import {
 const WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17/wasm";
 const FACE_MODEL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
-const HAND_MODEL =
-  "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+const GESTURE_MODEL =
+  "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task";
 
 export type Landmark = NormalizedLandmark;
 
@@ -23,21 +23,27 @@ export interface VisionFrame {
   faceLandmarks: Landmark[][];
   handLandmarks: Landmark[][];
   handedness: string[];
+  /** Top canned gesture per detected hand: "None" | "Closed_Fist" | "Open_Palm" | "Pointing_Up" | "Thumb_Down" | "Thumb_Up" | "Victory" | "ILoveYou" */
+  gestures: string[];
 }
 
 export type VisionStatus = "idle" | "loading" | "ready" | "unavailable";
 
 /**
- * Lazily-initialized wrapper around MediaPipe FaceLandmarker + HandLandmarker.
- * Designed to fail soft: if the models can't be fetched (offline, blocked
- * network, no WebGL2 for the delegate, ...) the app keeps working with the
- * shader pipeline alone and vision toggles simply report "unavailable".
+ * Lazily-initialized wrapper around MediaPipe FaceLandmarker +
+ * GestureRecognizer. GestureRecognizer gives us hand landmarks *and* canned
+ * gesture classification (Open_Palm, Victory, Thumb_Up, ...) from a single
+ * model, which doubles as both the hand-trail overlay input and the
+ * hands-free control signal for GestureController. Fails soft: if the
+ * models can't be fetched (offline, blocked network, no WebGL2 for the
+ * delegate, ...) the app keeps working with the shader pipeline alone and
+ * vision toggles simply report "unavailable".
  */
 export class VisionEngine {
   private faceLandmarker: FaceLandmarker | null = null;
-  private handLandmarker: HandLandmarker | null = null;
+  private gestureRecognizer: GestureRecognizer | null = null;
   private lastFace: FaceLandmarkerResult | null = null;
-  private lastHands: HandLandmarkerResult | null = null;
+  private lastGesture: GestureRecognizerResult | null = null;
   private initPromise: Promise<void> | null = null;
 
   status: VisionStatus = "idle";
@@ -60,8 +66,8 @@ export class VisionEngine {
         outputFacialTransformationMatrixes: false,
       });
 
-      this.handLandmarker = await HandLandmarker.createFromOptions(filesetResolver, {
-        baseOptions: { modelAssetPath: HAND_MODEL, delegate: "GPU" },
+      this.gestureRecognizer = await GestureRecognizer.createFromOptions(filesetResolver, {
+        baseOptions: { modelAssetPath: GESTURE_MODEL, delegate: "GPU" },
         runningMode: "VIDEO",
         numHands: 2,
       });
@@ -85,9 +91,9 @@ export class VisionEngine {
           /* transient decode hiccups are expected; keep last good result */
         }
       }
-      if (this.handsEnabled && this.handLandmarker && video.readyState >= 2) {
+      if (this.handsEnabled && this.gestureRecognizer && video.readyState >= 2) {
         try {
-          this.lastHands = this.handLandmarker.detectForVideo(video, timestampMs);
+          this.lastGesture = this.gestureRecognizer.recognizeForVideo(video, timestampMs);
         } catch {
           /* ignore */
         }
@@ -96,15 +102,18 @@ export class VisionEngine {
 
     return {
       faceLandmarks: this.faceEnabled ? (this.lastFace?.faceLandmarks ?? []) : [],
-      handLandmarks: this.handsEnabled ? (this.lastHands?.landmarks ?? []) : [],
+      handLandmarks: this.handsEnabled ? (this.lastGesture?.landmarks ?? []) : [],
       handedness: this.handsEnabled
-        ? (this.lastHands?.handedness ?? []).map((h) => h[0]?.categoryName ?? "?")
+        ? (this.lastGesture?.handedness ?? []).map((h) => h[0]?.categoryName ?? "?")
+        : [],
+      gestures: this.handsEnabled
+        ? (this.lastGesture?.gestures ?? []).map((g) => g[0]?.categoryName ?? "None")
         : [],
     };
   }
 
   dispose(): void {
     this.faceLandmarker?.close();
-    this.handLandmarker?.close();
+    this.gestureRecognizer?.close();
   }
 }

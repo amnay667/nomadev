@@ -1,7 +1,8 @@
 // End-to-end smoke test: drives the built app in real Chromium against a
 // synthetic fake camera device (see generate-fake-camera.mjs) and asserts
-// every shader effect actually renders a non-uniform frame, vision toggles
-// don't crash the app even when the MediaPipe CDN is unreachable, and the
+// the live feed actually renders a non-uniform frame, vision toggles don't
+// crash the app even when the MediaPipe CDN is unreachable, background
+// modes composite correctly, recording produces a real download, and the
 // snapshot action doesn't throw.
 //
 // Usage:
@@ -14,8 +15,6 @@ import path from "node:path";
 const FAKE_VIDEO = process.argv[2] ?? "test/fixtures/fake-cam.y4m";
 const PORT = process.env.E2E_PORT ?? "4173";
 const CHROMIUM_PATH = process.env.PLAYWRIGHT_CHROMIUM_PATH; // optional override
-
-const EFFECT_IDS = ["raw", "edge", "thermal", "ascii", "glitch", "kaleidoscope", "nightvision"];
 
 function waitForServer(url, timeoutMs = 20000) {
   const start = Date.now();
@@ -94,13 +93,9 @@ async function main() {
     console.log("camera started");
     await page.waitForTimeout(500);
 
-    const results = {};
-    const effectButtons = await page.$$("#effect-group button");
-    for (let i = 0; i < EFFECT_IDS.length; i++) {
-      await effectButtons[i].click();
-      await page.waitForTimeout(450);
-      results[EFFECT_IDS[i]] = await sampleCanvasStats(page);
-    }
+    const feedStats = await sampleCanvasStats(page);
+    console.log(`live feed render check: mean=${feedStats.mean.toFixed(1)} stddev=${feedStats.stddev.toFixed(1)}`);
+    const feedOk = feedStats.stddev >= 1.0;
 
     const toggleButtons = await page.$$("#vision-group button");
     for (const btn of toggleButtons) {
@@ -112,15 +107,104 @@ async function main() {
     await page.click("#btn-snapshot"); // must not throw
     await page.waitForTimeout(200);
 
+    // Background modes must not crash even without a reachable segmentation
+    // model (they should just have no visible effect until one loads).
+    console.log("\n=== background mode smoke test ===");
+    const bgButtons = await page.$$("#background-group button");
+    for (const btn of bgButtons) {
+      if (await btn.isDisabled()) continue;
+      const label = await btn.textContent();
+      await btn.click();
+      await page.waitForTimeout(300);
+      console.log(`clicked background: ${label}`);
+    }
+    await page.click("#background-group button"); // back to "Off"
+
+    // Synthetic-mask alignment check: freeze the real segmentation model
+    // (in case it actually loaded -- it needs a live network path to the
+    // MediaPipe CDN, which may or may not be reachable from this sandbox,
+    // and if it IS reachable it would otherwise overwrite our synthetic
+    // mask every frame) and feed a hand-built mask that is foreground on
+    // the raw-camera-space left half, background on the right half. If the
+    // mirrored-vs-screen-space uv bookkeeping in GLRenderer is correct, the
+    // composited foreground (video) should show up on the *right* side of
+    // the screen (since the feed is mirrored) and the green background
+    // should show on the *left*.
+    console.log("\n=== mask alignment check ===");
+    const diag = await page.evaluate(() => {
+      const w = 64,
+        h = 36;
+      const mask = new Uint8Array(w * h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          mask[y * w + x] = x < w / 2 ? 255 : 0;
+        }
+      }
+      const argus = window.__argus;
+      const segStatusBefore = argus.segmentation.status;
+      argus.freezeSegmentation(true);
+      argus.setBackgroundMode("color");
+      argus.uploadTestMask(mask, w, h);
+      return { segStatusBefore };
+    });
+    console.log("segmentation model status:", diag.segStatusBefore);
+    await page.waitForTimeout(250);
+
+    const pixelSample = await page.evaluate(() => {
+      const c = document.getElementById("gl-canvas");
+      const tmp = document.createElement("canvas");
+      tmp.width = c.width;
+      tmp.height = c.height;
+      const ctx = tmp.getContext("2d");
+      ctx.drawImage(c, 0, 0);
+      const sampleAt = (fx, fy) => {
+        const px = Math.floor(fx * tmp.width);
+        const py = Math.floor(fy * tmp.height);
+        const [r, g, b] = ctx.getImageData(px, py, 1, 1).data;
+        return { r, g, b };
+      };
+      return { left: sampleAt(0.08, 0.5), right: sampleAt(0.92, 0.5) };
+    });
+    // Compare against the renderer's actual known background colour (set in
+    // GLRenderer's constructor) rather than a generic "looks green" hue
+    // heuristic -- the synthetic test video's own time-varying gradient can
+    // coincidentally pass a loose hue check.
+    const BG_COLOR = { r: 5, g: 216, b: 102 };
+    const colorDistance = (p) => Math.hypot(p.r - BG_COLOR.r, p.g - BG_COLOR.g, p.b - BG_COLOR.b);
+    const isBg = (p) => colorDistance(p) < 30;
+    const leftIsBg = isBg(pixelSample.left);
+    const rightIsBg = isBg(pixelSample.right);
+    console.log("left px", pixelSample.left, leftIsBg ? "(green background, expected)" : "(NOT green)");
+    console.log("right px", pixelSample.right, rightIsBg ? "(green background, UNEXPECTED)" : "(foreground, expected)");
+    const maskAligned = leftIsBg && !rightIsBg;
+    console.log(maskAligned ? "OK   mask alignment correct" : "FAIL mask alignment incorrect (mirrored?)");
+    await page.screenshot({ path: "test/fixtures/mask-alignment.png" });
+
+    await page.evaluate(() => window.__argus.setBackgroundMode("off"));
+    await page.waitForTimeout(150);
+
+    // Recording must produce a downloadable file and not throw.
+    console.log("\n=== recording check ===");
+    let recordingOk = true;
+    try {
+      const downloadPromise = page.waitForEvent("download", { timeout: 8000 });
+      await page.click("#btn-record");
+      await page.waitForTimeout(1000);
+      await page.click("#btn-record");
+      const download = await downloadPromise;
+      console.log("OK   recording produced download:", download.suggestedFilename());
+    } catch (err) {
+      recordingOk = false;
+      console.log("FAIL recording did not produce a download:", err.message);
+    }
+
     await browser.close();
 
     let ok = true;
-    console.log("\n=== effect render check ===");
-    for (const [id, stats] of Object.entries(results)) {
-      const pass = stats.stddev >= 1.0;
-      console.log(`${pass ? "OK  " : "FAIL"} ${id.padEnd(14)} mean=${stats.mean.toFixed(1)} stddev=${stats.stddev.toFixed(1)}`);
-      if (!pass) ok = false;
-    }
+    console.log(`\n${feedOk ? "OK  " : "FAIL"} live feed renders a non-uniform frame`);
+    if (!feedOk) ok = false;
+    if (!maskAligned) ok = false;
+    if (!recordingOk) ok = false;
     if (unexpectedErrors.length > 0) {
       ok = false;
       console.log("\nUnexpected console/page errors:");

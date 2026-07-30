@@ -1,43 +1,79 @@
+import passthroughSrc from "../shaders/passthrough.frag.glsl?raw";
+import blurHSrc from "../shaders/blur-h.frag.glsl?raw";
+import blurVSrc from "../shaders/blur-v.frag.glsl?raw";
+import compositeSrc from "../shaders/composite.frag.glsl?raw";
+
+// vUv: mirrored (1-x) camera-space uv -- use this to sample uTexture (raw
+// video) or any fresh, un-mirrored source (like the segmentation mask),
+// so the mirror gets applied at first use.
+// vScreenUv: raw, unflipped screen-fraction uv -- use this to sample any
+// texture that is itself the output of an earlier pass in *this* pipeline
+// (a render-target, a blur pass), since that content was already written
+// out in screen-space addressing. Mixing these up causes a second,
+// unwanted horizontal flip.
 const VERTEX_SHADER = `#version 300 es
 out vec2 vUv;
+out vec2 vScreenUv;
 void main() {
   vec2 uv = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-  // Mirror horizontally so the feed reads like a selfie mirror; landmark
-  // math in the overlay layer mirrors the same way to stay in registration.
+  vScreenUv = uv;
   vUv = vec2(1.0 - uv.x, uv.y);
   gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
 }`;
 
 export type UniformValue = number | [number, number] | [number, number, number] | [number, number, number, number];
 
-export interface EffectDef {
+interface ShaderPass {
   id: string;
-  label: string;
-  /** GLSL ES 3.00 fragment shader body (no #version/precision/in/out boilerplate needed if using `fragmentSource`). */
   fragmentSource: string;
-  /** Optional per-frame extra uniforms (beyond the built-ins every shader gets). */
-  uniforms?: Record<string, UniformValue>;
 }
+
+export type BackgroundMode = "off" | "blur" | "color" | "image";
 
 interface CompiledProgram {
   program: WebGLProgram;
   uniformLocations: Map<string, WebGLUniformLocation | null>;
 }
 
+interface RenderTarget {
+  fbo: WebGLFramebuffer;
+  texture: WebGLTexture;
+}
+
+interface RenderOptions {
+  target?: RenderTarget | null;
+  sourceTexture?: WebGLTexture;
+  extraUniforms?: Record<string, UniformValue>;
+}
+
+const PASSTHROUGH: ShaderPass = { id: "passthrough", fragmentSource: passthroughSrc };
+
 /**
- * WebGL2 single-pass-per-frame renderer with a rolling "previous frame"
- * feedback texture, so any effect can do trails/datamoshing/motion-blur
- * style compositing just by sampling `uPrevFrame`.
+ * WebGL2 renderer for the live camera feed. The common path is a single
+ * draw call straight to the canvas; when a background mode is active it
+ * renders the feed to an offscreen target, derives a background layer
+ * (blurred video / solid colour / replacement image), and composites the
+ * two using a live person-segmentation mask.
  */
 export class GLRenderer {
   readonly gl: WebGL2RenderingContext;
   private readonly canvas: HTMLCanvasElement;
   private readonly programs = new Map<string, CompiledProgram>();
   private readonly videoTexture: WebGLTexture;
-  private prevFrameTexture: WebGLTexture;
-  private prevFrameSize = { width: 0, height: 0 };
-  private startTime = performance.now();
   private vao: WebGLVertexArrayObject;
+
+  private effectTarget: RenderTarget | null = null;
+  private blurTargetA: RenderTarget | null = null;
+  private blurTargetB: RenderTarget | null = null;
+  private targetSize = { width: 0, height: 0 };
+
+  private maskTexture: WebGLTexture;
+  private bgImageTexture: WebGLTexture;
+  private solidColorTexture: WebGLTexture;
+
+  backgroundMode: BackgroundMode = "off";
+  blurRadius = 2.2;
+  maskFeather = 0.08;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -55,7 +91,19 @@ export class GLRenderer {
     gl.bindVertexArray(this.vao);
 
     this.videoTexture = this.createTexture();
-    this.prevFrameTexture = this.createTexture();
+    this.maskTexture = this.createTexture();
+    this.bgImageTexture = this.createTexture();
+    this.solidColorTexture = this.createTexture();
+    this.setBackgroundColor(0.02, 0.85, 0.4);
+
+    // Sampling a texture with no allocated storage is undefined behaviour.
+    // Default the mask to "fully foreground" (255) so the feed renders
+    // normally until a real segmentation mask arrives, and default the
+    // replacement-background image to a neutral fill until one is uploaded.
+    gl.bindTexture(gl.TEXTURE_2D, this.maskTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array([255]));
+    gl.bindTexture(gl.TEXTURE_2D, this.bgImageTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([20, 20, 24, 255]));
   }
 
   private createTexture(): WebGLTexture {
@@ -69,6 +117,42 @@ export class GLRenderer {
     return tex;
   }
 
+  private createRenderTarget(width: number, height: number): RenderTarget {
+    const gl = this.gl;
+    const texture = this.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+    const fbo = gl.createFramebuffer()!;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { fbo, texture };
+  }
+
+  private resizeRenderTarget(target: RenderTarget, width: number, height: number): void {
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, target.texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  }
+
+  private ensureOffscreenTargets(): void {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    if (this.targetSize.width === w && this.targetSize.height === h && this.effectTarget) return;
+
+    if (!this.effectTarget) {
+      this.effectTarget = this.createRenderTarget(w, h);
+      this.blurTargetA = this.createRenderTarget(w, h);
+      this.blurTargetB = this.createRenderTarget(w, h);
+    } else {
+      this.resizeRenderTarget(this.effectTarget, w, h);
+      this.resizeRenderTarget(this.blurTargetA!, w, h);
+      this.resizeRenderTarget(this.blurTargetB!, w, h);
+    }
+    this.targetSize = { width: w, height: h };
+  }
+
   resize(width: number, height: number): void {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = Math.max(1, Math.round(width * dpr));
@@ -77,11 +161,6 @@ export class GLRenderer {
     this.canvas.width = w;
     this.canvas.height = h;
     this.gl.viewport(0, 0, w, h);
-    // Reset the feedback texture to the new size (avoids stretched garbage).
-    const gl = this.gl;
-    gl.bindTexture(gl.TEXTURE_2D, this.prevFrameTexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    this.prevFrameSize = { width: w, height: h };
   }
 
   private compile(id: string, fragmentBody: string): CompiledProgram {
@@ -140,6 +219,19 @@ export class GLRenderer {
     else gl.uniform4f(loc, value[0], value[1], value[2], value[3]);
   }
 
+  /**
+   * Sampler uniforms (the texture-unit index a `sampler2D` should read from)
+   * must be set with `uniform1i`, never `uniform1f` -- using the float
+   * setter on a sampler is a type mismatch that WebGL silently rejects
+   * (INVALID_OPERATION, uniform left unchanged), which is a very easy way
+   * to end up with every texture uniform quietly aliased to unit 0.
+   */
+  private setSamplerUniform(compiled: CompiledProgram, name: string, unit: number): void {
+    const loc = this.location(compiled, name);
+    if (!loc) return;
+    this.gl.uniform1i(loc, unit);
+  }
+
   /** Uploads the current video frame as the source texture. */
   uploadVideoFrame(source: TexImageSource): void {
     const gl = this.gl;
@@ -149,42 +241,123 @@ export class GLRenderer {
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   }
 
-  renderEffect(effect: EffectDef, extraUniforms?: Record<string, UniformValue>): void {
+  /** Uploads a fresh person-confidence mask (0..255, single channel). */
+  uploadMask(data: Uint8Array, width: number, height: number): void {
     const gl = this.gl;
-    const compiled = this.compile(effect.id, effect.fragmentSource);
+    gl.bindTexture(gl.TEXTURE_2D, this.maskTexture);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, width, height, 0, gl.RED, gl.UNSIGNED_BYTE, data);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+  }
+
+  /** Uploads a static replacement-background image (already cropped to the output aspect). */
+  uploadBackgroundImage(source: TexImageSource): void {
+    const gl = this.gl;
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.bindTexture(gl.TEXTURE_2D, this.bgImageTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  }
+
+  setBackgroundColor(r: number, g: number, b: number): void {
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, this.solidColorTexture);
+    const bytes = new Uint8Array([r * 255, g * 255, b * 255, 255]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+  }
+
+  /** Debug/QA only: reads back a single mask texel + the last GL error, bypassing the composite shader entirely. */
+  debugReadMask(u: number, v: number): { value: number; glError: number } {
+    const gl = this.gl;
+    const fbo = gl.createFramebuffer()!;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.maskTexture, 0);
+    const px = new Uint8Array(4);
+    gl.readPixels(u, v, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    const glError = gl.getError();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(fbo);
+    return { value: px[0], glError };
+  }
+
+  private renderPass(pass: ShaderPass, opts: RenderOptions = {}): void {
+    const gl = this.gl;
+    const compiled = this.compile(pass.id, pass.fragmentSource);
     gl.useProgram(compiled.program);
     gl.bindVertexArray(this.vao);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, opts.target?.fbo ?? null);
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
 
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.videoTexture);
-    this.setUniform(compiled, "uTexture", 0);
-
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.prevFrameTexture);
-    this.setUniform(compiled, "uPrevFrame", 1);
+    gl.bindTexture(gl.TEXTURE_2D, opts.sourceTexture ?? this.videoTexture);
+    this.setSamplerUniform(compiled, "uTexture", 0);
 
     this.setUniform(compiled, "uResolution", [this.canvas.width, this.canvas.height]);
-    this.setUniform(compiled, "uTime", (performance.now() - this.startTime) / 1000);
+    this.setUniform(compiled, "uTime", performance.now() / 1000);
 
-    for (const [key, value] of Object.entries(effect.uniforms ?? {})) {
-      this.setUniform(compiled, key, value);
-    }
-    if (extraUniforms) {
-      for (const [key, value] of Object.entries(extraUniforms)) {
+    if (opts.extraUniforms) {
+      for (const [key, value] of Object.entries(opts.extraUniforms)) {
         this.setUniform(compiled, key, value);
       }
     }
 
-    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-    this.captureFeedback();
   }
 
-  private captureFeedback(): void {
+  private renderComposite(effectTarget: RenderTarget, backgroundTexture: WebGLTexture): void {
     const gl = this.gl;
-    gl.bindTexture(gl.TEXTURE_2D, this.prevFrameTexture);
-    gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 0, 0, this.canvas.width, this.canvas.height, 0);
+    const compiled = this.compile("internal:composite", compositeSrc);
+    gl.useProgram(compiled.program);
+    gl.bindVertexArray(this.vao);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, effectTarget.texture);
+    this.setSamplerUniform(compiled, "uEffectTex", 0);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, backgroundTexture);
+    this.setSamplerUniform(compiled, "uBackgroundTex", 1);
+
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.maskTexture);
+    this.setSamplerUniform(compiled, "uMask", 2);
+
+    this.setUniform(compiled, "uFeather", this.maskFeather);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  private renderBlurredBackground(): WebGLTexture {
+    const passH: ShaderPass = { id: "internal:blur-h", fragmentSource: blurHSrc };
+    const passV: ShaderPass = { id: "internal:blur-v", fragmentSource: blurVSrc };
+    this.renderPass(passH, { target: this.blurTargetA!, extraUniforms: { uRadius: this.blurRadius } });
+    this.renderPass(passV, {
+      target: this.blurTargetB!,
+      sourceTexture: this.blurTargetA!.texture,
+      extraUniforms: { uRadius: this.blurRadius },
+    });
+    return this.blurTargetB!.texture;
+  }
+
+  /** Renders the live camera feed, applying background segmentation compositing if active. */
+  render(): void {
+    if (this.backgroundMode === "off") {
+      this.renderPass(PASSTHROUGH);
+      return;
+    }
+
+    this.ensureOffscreenTargets();
+    this.renderPass(PASSTHROUGH, { target: this.effectTarget! });
+
+    const backgroundTexture =
+      this.backgroundMode === "blur"
+        ? this.renderBlurredBackground()
+        : this.backgroundMode === "image"
+          ? this.bgImageTexture
+          : this.solidColorTexture;
+
+    this.renderComposite(this.effectTarget!, backgroundTexture);
   }
 
   readPixelsAsDataURL(): string {

@@ -1,4 +1,4 @@
-import { FaceLandmarker, HandLandmarker, DrawingUtils } from "@mediapipe/tasks-vision";
+import { FaceLandmarker, GestureRecognizer, DrawingUtils } from "@mediapipe/tasks-vision";
 import type { Landmark, VisionFrame } from "../vision/VisionEngine";
 import { ParticleSystem } from "./ParticleSystem";
 
@@ -99,7 +99,7 @@ export class VisionOverlay {
 
   private drawHandSkeleton(landmarks: Landmark[]): void {
     const du = this.drawingUtils!;
-    du.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, {
+    du.drawConnectors(landmarks, GestureRecognizer.HAND_CONNECTIONS, {
       color: "#f472b690",
       lineWidth: 2,
     });

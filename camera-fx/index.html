@@ -46,6 +46,15 @@
       box-shadow: 0 0 0 1px var(--line), 0 30px 80px -20px #000c;
       background: #000;
     }
+    /* All three layers live inside #frame-wrapper so Auto Frame can pan/zoom
+       the video, face mesh, particles, and ink together with one CSS
+       transform -- they stay in perfect registration for free. */
+    #frame-wrapper {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 50%;
+      will-change: transform;
+    }
     canvas.layer {
       position: absolute;
       inset: 0;
@@ -196,9 +205,11 @@
   <div id="app">
     <div class="stage">
       <video id="source" autoplay playsinline muted></video>
-      <canvas id="gl-canvas" class="layer"></canvas>
-      <canvas id="overlay-canvas" class="layer"></canvas>
-      <canvas id="draw-canvas" class="layer"></canvas>
+      <div id="frame-wrapper">
+        <canvas id="gl-canvas" class="layer"></canvas>
+        <canvas id="overlay-canvas" class="layer"></canvas>
+        <canvas id="draw-canvas" class="layer"></canvas>
+      </div>
 
       <div class="hud" id="hud-top">
         <div class="badge rec" id="rec-badge"><span class="dot"></span>LIVE · ON-DEVICE ONLY</div>

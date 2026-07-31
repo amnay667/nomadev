@@ -1,6 +1,6 @@
 import type { BackgroundMode } from "../core/GLRenderer";
 
-export type VisionToggleKind = "face" | "hands" | "motion";
+export type VisionToggleKind = "face" | "hands" | "motion" | "autoframe";
 
 export interface ControlsCallbacks {
   onToggleVision: (kind: VisionToggleKind, enabled: boolean) => void;
@@ -15,6 +15,7 @@ export interface ControlsCallbacks {
 
 const VISION_TOGGLES: { kind: VisionToggleKind; label: string }[] = [
   { kind: "face", label: "👁 Face Mesh" },
+  { kind: "autoframe", label: "🎯 Auto Frame" },
   { kind: "hands", label: "✋ Hand Trails + Gestures" },
   { kind: "motion", label: "🌊 Motion Energy" },
 ];
@@ -136,7 +137,7 @@ export class Controls {
     if (available) return;
     // Motion Energy is plain frame-differencing and has no dependency on
     // the MediaPipe models, so it stays enabled even when they can't load.
-    for (const kind of ["face", "hands"] as VisionToggleKind[]) {
+    for (const kind of ["face", "autoframe", "hands"] as VisionToggleKind[]) {
       const btn = this.toggleButtons.get(kind);
       if (!btn) continue;
       btn.disabled = true;

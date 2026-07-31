@@ -23,10 +23,14 @@ export class VisionOverlay {
     height: number,
     time: number,
     dt: number,
+    drawFaceMesh = true,
   ): void {
     if (!this.drawingUtils) this.drawingUtils = new DrawingUtils(ctx);
 
-    if (frame.faceLandmarks.length > 0) {
+    // The face model may be running purely to drive Auto Frame, with the
+    // mesh visualization itself switched off -- landmarks still arrive
+    // every frame in that case, so gate the drawing separately.
+    if (drawFaceMesh && frame.faceLandmarks.length > 0) {
       this.drawFace(ctx, mirror(frame.faceLandmarks[0]), width, height, time);
     }
 

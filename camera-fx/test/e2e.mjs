@@ -231,6 +231,44 @@ async function main() {
     const airDrawOk = inkPresent && clearedOk;
     console.log(airDrawOk ? "OK   air draw" : "FAIL air draw");
 
+    // Auto Frame check: bypass the (network-gated) real face model via the
+    // debug hook and feed a synthetic, already-mirrored bounding box for a
+    // small, off-center "face" (as if the person had leaned back and to one
+    // side). Drive it for many simulated frames so the internal smoothing
+    // converges, then confirm the resulting transform actually zoomed in
+    // and panned toward the face rather than staying at the identity.
+    console.log("\n=== auto frame check ===");
+    const autoFrameResult = await page.evaluate(() => {
+      const aspect = 1280 / 720;
+      const landmarks = [
+        { x: 0.26, y: 0.55, z: 0, visibility: 1 },
+        { x: 0.34, y: 0.55, z: 0, visibility: 1 },
+        { x: 0.26, y: 0.68, z: 0, visibility: 1 },
+        { x: 0.34, y: 0.68, z: 0, visibility: 1 },
+      ];
+      let last;
+      for (let i = 0; i < 120; i++) {
+        last = window.__argus.driveAutoFrame(landmarks, aspect);
+      }
+      const transformStyle = window.__argus.frameWrapper.style.transform;
+      return { last, transformStyle };
+    });
+    console.log("converged transform:", autoFrameResult.last);
+    console.log("CSS transform string:", autoFrameResult.transformStyle);
+    const zoomedIn = autoFrameResult.last.zoom > 1.3;
+    const pannedTowardFace = Math.abs(autoFrameResult.last.cx - 0.3) < 0.05 && Math.abs(autoFrameResult.last.cy - 0.615) < 0.05;
+    console.log(zoomedIn ? "OK   zoomed in on the small/off-center face" : "FAIL did not zoom in");
+    console.log(pannedTowardFace ? "OK   panned toward the face" : "FAIL did not pan toward the face");
+    const autoFrameOk = zoomedIn && pannedTowardFace;
+
+    // Turning it off should snap the transform back to identity.
+    const identityToggle = await page.evaluate(() => {
+      window.__argus.autoFrame.reset();
+      window.__argus.frameWrapper.style.transform = "scale(1) translate(0%, 0%)";
+      return window.__argus.frameWrapper.style.transform;
+    });
+    console.log("reset transform:", identityToggle);
+
     // Recording must produce a downloadable file and not throw.
     console.log("\n=== recording check ===");
     let recordingOk = true;
@@ -253,6 +291,7 @@ async function main() {
     if (!feedOk) ok = false;
     if (!maskAligned) ok = false;
     if (!airDrawOk) ok = false;
+    if (!autoFrameOk) ok = false;
     if (!recordingOk) ok = false;
     if (unexpectedErrors.length > 0) {
       ok = false;

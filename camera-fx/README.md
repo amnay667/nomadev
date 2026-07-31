@@ -32,6 +32,21 @@ landmark is ever sent to a server; the camera stream never leaves
     live feed keeps working and the vision toggles just disable
     themselves instead of crashing.
 
+- **Auto Frame** (`src/vision/AutoFrame.ts`) — a Center-Stage-style
+  auto-zoom/pan that keeps you centered as you move, computed from the
+  same face landmarks (it can run "headless," without the Face Mesh
+  visualization). Deliberately implemented as a single CSS `transform`
+  (`scale` + `translate`) on a `#frame-wrapper` div containing the video,
+  overlay, and draw canvases, rather than remapping UV coordinates inside
+  the GL/shader pipeline — because all three layers already live in the
+  same screen-space, one shared transform keeps the video, face mesh, hand
+  particles, and ink in perfect registration for free, with zero changes
+  needed to any of that per-layer drawing code. The crop target is padded
+  around the face bounding box and enforces the output aspect ratio, so it
+  eases zoom in as you lean back/get smaller in frame and eases back out
+  to full width when you're already well-framed, smoothed frame-to-frame
+  so it reads as a slow, deliberate follow rather than a snap-to jitter.
+
 - **Air Draw** (`src/overlay/AirDraw.ts`) — with Hand Trails enabled,
   pinching your thumb and index finger together is "pen down": the index
   fingertip draws a persistent ink trail (a real `<canvas>` layer that
@@ -78,6 +93,7 @@ src/
                       fails soft if models/network are unavailable
     SegmentationEngine.ts  MediaPipe selfie-segmentation model, same fail-soft contract
     GestureController.ts   debounced, edge-triggered gesture -> action mapping
+    AutoFrame.ts      face-bbox -> smoothed (center, zoom) CSS transform
   overlay/
     VisionOverlay.ts  draws face mesh / hand skeleton, "third eye", spawns
                       fingertip particles

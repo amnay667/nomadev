@@ -7,10 +7,13 @@ import { GestureController, type GestureAction } from "./vision/GestureControlle
 import { VisionOverlay } from "./overlay/VisionOverlay";
 import { MotionEnergy } from "./overlay/MotionEnergy";
 import { AirDraw } from "./overlay/AirDraw";
+import { AutoFrame } from "./vision/AutoFrame";
+import type { Landmark } from "./vision/VisionEngine";
 import { FPSCounter } from "./utils/FPSCounter";
 import { Controls, type VisionToggleKind } from "./ui/Controls";
 
 const videoEl = document.getElementById("source") as HTMLVideoElement;
+const frameWrapper = document.getElementById("frame-wrapper") as HTMLElement;
 const glCanvas = document.getElementById("gl-canvas") as HTMLCanvasElement;
 const overlayCanvas = document.getElementById("overlay-canvas") as HTMLCanvasElement;
 const drawCanvas = document.getElementById("draw-canvas") as HTMLCanvasElement;
@@ -25,6 +28,7 @@ const gestureController = new GestureController();
 const visionOverlay = new VisionOverlay();
 const motionEnergy = new MotionEnergy();
 const airDraw = new AirDraw(drawCanvas);
+const autoFrame = new AutoFrame();
 const fps = new FPSCounter();
 const recorder = new Recorder();
 
@@ -34,9 +38,26 @@ const recordCanvas = document.createElement("canvas");
 const recordCtx = recordCanvas.getContext("2d")!;
 
 let motionEnabled = false;
+let faceMeshVisual = false;
+let autoFrameEnabled = false;
 let running = false;
 let isRecording = false;
 let lastFrameTime = performance.now();
+
+// The FaceLandmarker model needs to run whenever *either* the mesh
+// visualization or Auto Frame wants it -- Auto Frame can run "headless"
+// (landmarks only, no mesh drawn) and vice versa.
+function updateFaceModelState(): void {
+  vision.faceEnabled = faceMeshVisual || autoFrameEnabled;
+}
+
+function mirrorLandmarks(landmarks: Landmark[]): Landmark[] {
+  return landmarks.map((l) => ({ x: 1 - l.x, y: l.y, z: l.z, visibility: l.visibility }));
+}
+
+function applyFrameTransform(cx: number, cy: number, zoom: number): void {
+  frameWrapper.style.transform = `scale(${zoom}) translate(${(0.5 - cx) * 100}%, ${(0.5 - cy) * 100}%)`;
+}
 
 function resize(): void {
   const rect = stage.getBoundingClientRect();
@@ -136,7 +157,14 @@ function tick(now: number): void {
 
   if (vision.faceEnabled || vision.handsEnabled) {
     const frame = vision.update(videoEl, now);
-    visionOverlay.render(overlayCtx, frame, overlayCanvas.width, overlayCanvas.height, timeSec, dt);
+    visionOverlay.render(overlayCtx, frame, overlayCanvas.width, overlayCanvas.height, timeSec, dt, faceMeshVisual);
+
+    if (autoFrameEnabled) {
+      const mirrored = frame.faceLandmarks.length > 0 ? mirrorLandmarks(frame.faceLandmarks[0]) : null;
+      const aspect = overlayCanvas.width / overlayCanvas.height;
+      const { cx, cy, zoom } = autoFrame.update(mirrored, aspect);
+      applyFrameTransform(cx, cy, zoom);
+    }
 
     if (vision.handsEnabled) {
       airDraw.update(frame.handLandmarks, overlayCanvas.width, overlayCanvas.height);
@@ -162,7 +190,18 @@ const controls = new Controls({
       motionEnabled = enabled;
       return;
     }
-    if (kind === "face") vision.faceEnabled = enabled;
+    if (kind === "face") {
+      faceMeshVisual = enabled;
+      updateFaceModelState();
+    }
+    if (kind === "autoframe") {
+      autoFrameEnabled = enabled;
+      updateFaceModelState();
+      if (!enabled) {
+        autoFrame.reset();
+        applyFrameTransform(0.5, 0.5, 1);
+      }
+    }
     if (kind === "hands") {
       vision.handsEnabled = enabled;
       if (!enabled) controls.setGesture(null);
@@ -250,10 +289,19 @@ requestAnimationFrame(tick);
   renderer,
   segmentation,
   airDraw,
+  autoFrame,
+  frameWrapper,
   setBackgroundMode,
   freezeSegmentation: (frozen: boolean) => {
     segmentation.enabled = !frozen;
   },
   uploadTestMask: (data: Uint8Array, width: number, height: number) => renderer.uploadMask(data, width, height),
   debugReadMask: (x: number, y: number) => renderer.debugReadMask(x, y),
+  // Drives Auto Frame with synthetic (already-mirrored) landmarks and applies
+  // the resulting transform, bypassing the network-gated face model.
+  driveAutoFrame: (mirroredLandmarks: Landmark[] | null, aspect: number) => {
+    const { cx, cy, zoom } = autoFrame.update(mirroredLandmarks, aspect);
+    applyFrameTransform(cx, cy, zoom);
+    return { cx, cy, zoom };
+  },
 };

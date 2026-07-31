@@ -97,10 +97,20 @@ async function main() {
     console.log(`live feed render check: mean=${feedStats.mean.toFixed(1)} stddev=${feedStats.stddev.toFixed(1)}`);
     const feedOk = feedStats.stddev >= 1.0;
 
-    const toggleButtons = await page.$$("#vision-group button");
+    // Exercise every vision toggle except Air Instrument -- that one gets
+    // its own dedicated test below and needs to be OFF going into it, so a
+    // stray click here would just fight over its on/off state.
+    const toggleButtons = (await page.$$("#vision-group button")).slice(0, -1);
     for (const btn of toggleButtons) {
-      if (await btn.isDisabled()) continue;
-      await btn.click();
+      try {
+        if (await btn.isDisabled()) continue;
+        // Short per-click timeout: the model-unavailable check can flip a
+        // button to disabled mid-click (network resolves asynchronously),
+        // which would otherwise retry against a moving target for 30s.
+        await btn.click({ timeout: 2000 });
+      } catch {
+        /* button got disabled mid-click (model resolved as unavailable); not a failure */
+      }
     }
     await page.waitForTimeout(1500);
 
@@ -269,6 +279,88 @@ async function main() {
     });
     console.log("reset transform:", identityToggle);
 
+    // Posture Coach check: bypass the (network-gated) real pose model via
+    // the debug hook. Feed synthetic, already-mirrored 33-point BlazePose
+    // landmarks with the ears well above the shoulders ("sitting up
+    // straight") for enough simulated frames to both complete calibration
+    // and clear the status-change hold, then switch to ears dropped much
+    // closer to the shoulders ("slouching") and confirm it's flagged.
+    console.log("\n=== posture coach check ===");
+    const postureResult = await page.evaluate(() => {
+      const mkPose = (earY, shoulderY) => {
+        const lm = Array.from({ length: 33 }, () => ({ x: 0, y: 0, z: 0, visibility: 1 }));
+        lm[7] = { x: 0.42, y: earY, z: 0, visibility: 1 }; // left ear
+        lm[8] = { x: 0.58, y: earY, z: 0, visibility: 1 }; // right ear
+        lm[11] = { x: 0.38, y: shoulderY, z: 0, visibility: 1 }; // left shoulder
+        lm[12] = { x: 0.62, y: shoulderY, z: 0, visibility: 1 }; // right shoulder
+        return lm;
+      };
+      const argus = window.__argus;
+      let t = 1000;
+      const step = 33;
+      let reading;
+      // Calibration (45 frames) + enough frames past the 800ms hold for "good" to settle.
+      for (let i = 0; i < 90; i++) {
+        t += step;
+        reading = argus.drivePosture(mkPose(0.35, 0.55), t);
+      }
+      const goodStatus = reading.status;
+      // Ears drop much closer to the shoulder line -- simulated slouch/neck-craning.
+      for (let i = 0; i < 40; i++) {
+        t += step;
+        reading = argus.drivePosture(mkPose(0.46, 0.55), t);
+      }
+      const slouchStatus = reading.status;
+      return { goodStatus, slouchStatus, reading };
+    });
+    console.log("after calibration + good posture held:", postureResult.goodStatus);
+    console.log("after sustained slouch:", postureResult.slouchStatus, postureResult.reading);
+    const postureOk = postureResult.goodStatus === "good" && postureResult.slouchStatus === "bad";
+    console.log(postureOk ? "OK   posture coach" : "FAIL posture coach did not classify good/bad correctly");
+
+    // Air Instrument check: started directly through the debug hook rather
+    // than the UI toggle -- by this point in the run the vision models have
+    // resolved "unavailable" (no network path to the MediaPipe CDN in this
+    // sandbox), which correctly disables the toggle button in real usage
+    // (no hand tracking = no way to play it), but the instrument's own
+    // audio-math is independent of that model and worth testing on its own.
+    // Then drive it with synthetic hand landmarks and confirm pitch/volume
+    // respond in the right direction, and that it goes silent with no hands.
+    console.log("\n=== air instrument check ===");
+    const instrumentResult = await page.evaluate(() => {
+      const argus = window.__argus;
+      argus.airInstrument.start();
+      const active = argus.airInstrument.active;
+      const lowHand = argus.driveInstrument([[{ x: 0, y: 0.9, z: 0, visibility: 1 }]]);
+      const highHand = argus.driveInstrument([[{ x: 0, y: 0.1, z: 0, visibility: 1 }]]);
+      const twoHandsQuiet = argus.driveInstrument([
+        [{ x: 0, y: 0.5, z: 0, visibility: 1 }],
+        [{ x: 0, y: 0.9, z: 0, visibility: 1 }],
+      ]);
+      const twoHandsLoud = argus.driveInstrument([
+        [{ x: 0, y: 0.5, z: 0, visibility: 1 }],
+        [{ x: 0, y: 0.1, z: 0, visibility: 1 }],
+      ]);
+      const silent = argus.driveInstrument([]);
+      return { active, lowHand, highHand, twoHandsQuiet, twoHandsLoud, silent };
+    });
+    console.log("active:", instrumentResult.active);
+    console.log("low hand freq:", instrumentResult.lowHand.frequency.toFixed(1), "high hand freq:", instrumentResult.highHand.frequency.toFixed(1));
+    console.log("two-hands quiet gain:", instrumentResult.twoHandsQuiet.gain.toFixed(2), "two-hands loud gain:", instrumentResult.twoHandsLoud.gain.toFixed(2));
+    console.log("silent (no hands) gain:", instrumentResult.silent.gain);
+    const pitchOk = instrumentResult.highHand.frequency > instrumentResult.lowHand.frequency;
+    const volumeOk = instrumentResult.twoHandsLoud.gain > instrumentResult.twoHandsQuiet.gain;
+    const silentOk = instrumentResult.silent.gain === 0 && instrumentResult.silent.pitchHandY === null;
+    console.log(pitchOk ? "OK   higher hand = higher pitch" : "FAIL pitch mapping wrong");
+    console.log(volumeOk ? "OK   higher second hand = louder" : "FAIL volume mapping wrong");
+    console.log(silentOk ? "OK   silent with no hands" : "FAIL not silent with no hands");
+    const stoppedOk = await page.evaluate(() => {
+      window.__argus.airInstrument.stop();
+      return !window.__argus.airInstrument.active;
+    });
+    console.log(stoppedOk ? "OK   instrument stops on toggle-off" : "FAIL instrument still active");
+    const instrumentOk = instrumentResult.active && pitchOk && volumeOk && silentOk && stoppedOk;
+
     // Recording must produce a downloadable file and not throw.
     console.log("\n=== recording check ===");
     let recordingOk = true;
@@ -292,6 +384,8 @@ async function main() {
     if (!maskAligned) ok = false;
     if (!airDrawOk) ok = false;
     if (!autoFrameOk) ok = false;
+    if (!postureOk) ok = false;
+    if (!instrumentOk) ok = false;
     if (!recordingOk) ok = false;
     if (unexpectedErrors.length > 0) {
       ok = false;

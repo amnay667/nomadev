@@ -1,6 +1,6 @@
 import type { BackgroundMode } from "../core/GLRenderer";
 
-export type VisionToggleKind = "face" | "hands" | "motion" | "autoframe";
+export type VisionToggleKind = "face" | "hands" | "motion" | "autoframe" | "posture" | "instrument";
 
 export interface ControlsCallbacks {
   onToggleVision: (kind: VisionToggleKind, enabled: boolean) => void;
@@ -8,6 +8,7 @@ export interface ControlsCallbacks {
   onBackgroundImageFile: (file: File) => void;
   onSelectDrawColor: (color: string) => void;
   onClearDrawing: () => void;
+  onRecalibratePosture: () => void;
   onSnapshot: () => void;
   onToggleRecord: () => void;
   onStart: () => void;
@@ -18,6 +19,8 @@ const VISION_TOGGLES: { kind: VisionToggleKind; label: string }[] = [
   { kind: "autoframe", label: "🎯 Auto Frame" },
   { kind: "hands", label: "✋ Hand Trails + Gestures" },
   { kind: "motion", label: "🌊 Motion Energy" },
+  { kind: "posture", label: "🧍 Posture Coach" },
+  { kind: "instrument", label: "🎹 Air Instrument" },
 ];
 
 const BACKGROUND_MODES: { mode: BackgroundMode; label: string }[] = [
@@ -47,6 +50,8 @@ export class Controls {
   private readonly spinner = document.getElementById("status-spinner")!;
   private readonly fpsBadge = document.getElementById("fps-badge")!;
   private readonly gestureBadge = document.getElementById("gesture-badge")!;
+  private readonly postureBadge = document.getElementById("posture-badge")!;
+  private readonly postureRecalibrateBtn = document.getElementById("btn-posture-recalibrate")! as HTMLButtonElement;
 
   private toggleButtons = new Map<VisionToggleKind, HTMLButtonElement>();
   private backgroundButtons = new Map<BackgroundMode, HTMLButtonElement>();
@@ -58,6 +63,7 @@ export class Controls {
     this.buildDrawColorButtons();
 
     this.drawClearBtn.addEventListener("click", () => this.callbacks.onClearDrawing());
+    this.postureRecalibrateBtn.addEventListener("click", () => this.callbacks.onRecalibratePosture());
     this.snapshotBtn.addEventListener("click", () => this.callbacks.onSnapshot());
     this.recordBtn.addEventListener("click", () => this.callbacks.onToggleRecord());
     this.bgImageInput.addEventListener("change", () => {
@@ -137,7 +143,7 @@ export class Controls {
     if (available) return;
     // Motion Energy is plain frame-differencing and has no dependency on
     // the MediaPipe models, so it stays enabled even when they can't load.
-    for (const kind of ["face", "autoframe", "hands"] as VisionToggleKind[]) {
+    for (const kind of ["face", "autoframe", "hands", "posture", "instrument"] as VisionToggleKind[]) {
       const btn = this.toggleButtons.get(kind);
       if (!btn) continue;
       btn.disabled = true;
@@ -168,6 +174,25 @@ export class Controls {
     }
     this.gestureBadge.style.display = "";
     this.gestureBadge.textContent = `✋ ${name.replace(/_/g, " ")}`;
+  }
+
+  setPosture(status: "calibrating" | "none" | "good" | "warn" | "bad" | null): void {
+    if (!status) {
+      this.postureBadge.style.display = "none";
+      return;
+    }
+    this.postureBadge.style.display = "";
+    const copy: Record<Exclude<typeof status, null>, { text: string; color: string }> = {
+      calibrating: { text: "🧍 Calibrating…", color: "var(--text-dim)" },
+      none: { text: "🧍 No body detected", color: "var(--text-dim)" },
+      good: { text: "🧍 Good posture", color: "var(--accent)" },
+      warn: { text: "🧍 Sit up a bit", color: "#facc15" },
+      bad: { text: "🧍 Slouching", color: "var(--accent-2)" },
+    };
+    const { text, color } = copy[status];
+    this.postureBadge.textContent = text;
+    this.postureBadge.style.color = color;
+    this.postureBadge.style.borderColor = color;
   }
 
   showError(message: string): void {

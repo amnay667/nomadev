@@ -1,10 +1,11 @@
 # Argus — Live Camera Vision Engine
 
 A real-time, fully client-side virtual camera. Background segmentation,
-face mesh, hand/gesture tracking, pinch-to-draw, and recording all run as
-WebGL2 + WASM/GPU inference inside your browser tab. No frame, image, or
-landmark is ever sent to a server; the camera stream never leaves
-`localhost` (or wherever you deploy the static build).
+face mesh, full-body posture coaching, hand/gesture tracking, an air
+instrument, pinch-to-draw, and recording all run as WebGL2 + WASM/GPU
+inference inside your browser tab. No frame, image, or landmark is ever
+sent to a server; the camera stream never leaves `localhost` (or wherever
+you deploy the static build).
 
 ## What it does
 
@@ -64,6 +65,30 @@ landmark is ever sent to a server; the camera stream never leaves
   background mode, ✊ Closed_Fist → start/stop recording, ✌️ Victory →
   clear the drawing. A HUD badge shows the currently recognized gesture.
 
+- **Posture Coach** (`src/vision/PostureCoach.ts`) — MediaPipe's
+  33-point BlazePose model tracks your ears, shoulders, and hips; the
+  ear-to-shoulder distance (as a fraction of shoulder width, so it's
+  invariant to body size and camera distance) is calibrated against a
+  ~1.5s "sit up straight" baseline the first time you enable it, then every
+  subsequent frame is scored against *that specific baseline* rather than
+  an absolute threshold. Craning your neck forward/down shrinks that
+  distance; uneven shoulder height is checked in parallel. Both are
+  debounced (~800ms sustained) before the status badge and colour-coded
+  skeleton overlay (teal/yellow/pink) actually change, so a momentary
+  shift doesn't flicker the verdict. Hit Recalibrate any time you sit down
+  fresh.
+
+- **Air Instrument** (`src/audio/AirInstrument.ts`) — a two-handed
+  theremin built entirely on the Web Audio API and the hand landmarks
+  already tracked for Hand Trails (no extra model): your first tracked
+  hand's height controls pitch (mapped log-scale over two octaves so it
+  sounds musical, not linear-in-Hz), a second hand's height controls
+  volume, and it fades to silence with no hands up. Every parameter change
+  rides on `AudioParam.setTargetAtTime` smoothing so hand-tracking jitter
+  never produces zipper noise or clicks. Runs "headless" from Hand Trails
+  the same way Auto Frame does with Face Mesh — it only needs the hand
+  model running, not the trail visualization.
+
 - **Motion Energy** (`src/overlay/MotionEnergy.ts`) — a from-scratch
   48×27 grid frame-differencing field (no model, just luminance diffing +
   exponential decay) rendered as a glowing heat trail wherever the frame
@@ -89,24 +114,28 @@ src/
   shaders/            passthrough.frag.glsl (video -> canvas) plus
                       blur-h/blur-v/composite for background compositing
   vision/
-    VisionEngine.ts   MediaPipe FaceLandmarker + GestureRecognizer, lazy init,
-                      fails soft if models/network are unavailable
+    VisionEngine.ts   MediaPipe FaceLandmarker + GestureRecognizer +
+                      PoseLandmarker, lazy init, fails soft if
+                      models/network are unavailable
     SegmentationEngine.ts  MediaPipe selfie-segmentation model, same fail-soft contract
     GestureController.ts   debounced, edge-triggered gesture -> action mapping
     AutoFrame.ts      face-bbox -> smoothed (center, zoom) CSS transform
+    PostureCoach.ts   calibrated, scale-invariant posture scoring off pose landmarks
   overlay/
-    VisionOverlay.ts  draws face mesh / hand skeleton, "third eye", spawns
-                      fingertip particles
+    VisionOverlay.ts  draws face mesh / hand skeleton / pose skeleton,
+                      "third eye", spawns fingertip particles
     ParticleSystem.ts generic 2D particle physics + additive-blend rendering
     MotionEnergy.ts   frame-differencing motion field
     AirDraw.ts        persistent pinch-to-draw ink layer
+  audio/
+    AirInstrument.ts  two-handed Web Audio theremin (pitch + volume from hand height)
   ui/
     Controls.ts       all DOM wiring for the control panel / start screen
   utils/
     FPSCounter.ts
   main.ts             wires camera -> renderer -> vision -> segmentation ->
-                       gestures -> overlay -> UI, owns the single
-                       requestAnimationFrame loop
+                       gestures -> posture -> instrument -> overlay -> UI,
+                       owns the single requestAnimationFrame loop
 ```
 
 Design choices worth calling out:
@@ -154,7 +183,8 @@ that's a browser security requirement, not specific to this app.
 skin-tone "face" blob with eyes/mouth over a shifting gradient — no ffmpeg
 or external assets needed) and `test/e2e.mjs` drives a real headless
 Chromium against it via `--use-file-for-fake-video-capture`, exercising
-the live feed, vision toggles, every background mode, and recording:
+the live feed, vision toggles, every background mode, Air Draw, Auto
+Frame, Posture Coach, the Air Instrument, and recording:
 
 ```bash
 npm run build
@@ -168,11 +198,14 @@ unexpected console/page error — network errors from the MediaPipe CDN
 being unreachable are treated as expected soft-failure noise, not a test
 failure.
 
-Background compositing correctness (the mirrored-vs-screen-space UV
-bookkeeping) is checked without depending on the segmentation model
-actually being reachable: `main.ts` exposes a `window.__argus` debug hook
-(harmless in normal use) that lets the test freeze segmentation and upload
-a hand-built mask directly, then samples the rendered canvas to confirm
+Everything that depends on a MediaPipe model (background compositing's
+mirrored-vs-screen-space UV bookkeeping, Auto Frame's crop math, Posture
+Coach's calibrated scoring, the Air Instrument's pitch/volume mapping) is
+checked without depending on that model actually being reachable:
+`main.ts` exposes a `window.__argus` debug hook (harmless in normal use)
+that lets the test feed synthetic, already-mirrored landmarks straight
+into each module and assert on the result directly, or sample the
+rendered canvas to confirm
 foreground/background land on the correct side of the screen.
 
 ## Privacy

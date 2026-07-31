@@ -4,10 +4,12 @@ import { Recorder } from "./core/Recorder";
 import { VisionEngine } from "./vision/VisionEngine";
 import { SegmentationEngine } from "./vision/SegmentationEngine";
 import { GestureController, type GestureAction } from "./vision/GestureController";
-import { VisionOverlay } from "./overlay/VisionOverlay";
+import { PostureCoach, type PostureStatus } from "./vision/PostureCoach";
+import { VisionOverlay, mirrorLandmarks } from "./overlay/VisionOverlay";
 import { MotionEnergy } from "./overlay/MotionEnergy";
 import { AirDraw } from "./overlay/AirDraw";
 import { AutoFrame } from "./vision/AutoFrame";
+import { AirInstrument } from "./audio/AirInstrument";
 import type { Landmark } from "./vision/VisionEngine";
 import { FPSCounter } from "./utils/FPSCounter";
 import { Controls, type VisionToggleKind } from "./ui/Controls";
@@ -29,8 +31,18 @@ const visionOverlay = new VisionOverlay();
 const motionEnergy = new MotionEnergy();
 const airDraw = new AirDraw(drawCanvas);
 const autoFrame = new AutoFrame();
+const postureCoach = new PostureCoach();
+const airInstrument = new AirInstrument();
 const fps = new FPSCounter();
 const recorder = new Recorder();
+
+const POSTURE_COLORS: Record<PostureStatus, string> = {
+  calibrating: "#8790a8",
+  none: "#8790a8",
+  good: "#5eead4",
+  warn: "#facc15",
+  bad: "#f472b6",
+};
 
 // A hidden canvas continuously redrawn (gl-canvas + overlay-canvas merged)
 // only while recording, so MediaRecorder has a single source to capture.
@@ -40,6 +52,9 @@ const recordCtx = recordCanvas.getContext("2d")!;
 let motionEnabled = false;
 let faceMeshVisual = false;
 let autoFrameEnabled = false;
+let handsVisual = false;
+let instrumentEnabled = false;
+let postureEnabled = false;
 let running = false;
 let isRecording = false;
 let lastFrameTime = performance.now();
@@ -51,12 +66,52 @@ function updateFaceModelState(): void {
   vision.faceEnabled = faceMeshVisual || autoFrameEnabled;
 }
 
-function mirrorLandmarks(landmarks: Landmark[]): Landmark[] {
-  return landmarks.map((l) => ({ x: 1 - l.x, y: l.y, z: l.z, visibility: l.visibility }));
+// Same idea for hands: the Air Instrument needs hand landmarks but not the
+// trail visualization/gesture control, so it can run without "Hand Trails"
+// switched on, and vice versa.
+function updateHandsModelState(): void {
+  vision.handsEnabled = handsVisual || instrumentEnabled;
 }
 
 function applyFrameTransform(cx: number, cy: number, zoom: number): void {
   frameWrapper.style.transform = `scale(${zoom}) translate(${(0.5 - cx) * 100}%, ${(0.5 - cy) * 100}%)`;
+}
+
+/** Two simple vertical fader bars (pitch on the left, volume on the right) so you can see what the Air Instrument is hearing. */
+function drawInstrumentHud(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  reading: { pitchHandY: number | null; volumeHandY: number | null },
+): void {
+  const barTop = height * 0.15;
+  const barBottom = height * 0.85;
+  const drawFader = (x: number, handY: number | null, color: string) => {
+    ctx.strokeStyle = "#ffffff20";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x, barTop);
+    ctx.lineTo(x, barBottom);
+    ctx.stroke();
+    if (handY === null) return;
+    const y = barTop + handY * (barBottom - barTop);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, 18);
+    glow.addColorStop(0, `${color}cc`);
+    glow.addColorStop(1, `${color}00`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(x, y, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  drawFader(width * 0.06, reading.pitchHandY, "#5eead4");
+  drawFader(width * 0.94, reading.volumeHandY, "#f472b6");
 }
 
 function resize(): void {
@@ -155,9 +210,18 @@ function tick(now: number): void {
     motionEnergy.draw(overlayCtx, overlayCanvas.width, overlayCanvas.height, timeSec);
   }
 
-  if (vision.faceEnabled || vision.handsEnabled) {
+  if (vision.faceEnabled || vision.handsEnabled || vision.poseEnabled) {
     const frame = vision.update(videoEl, now);
-    visionOverlay.render(overlayCtx, frame, overlayCanvas.width, overlayCanvas.height, timeSec, dt, faceMeshVisual);
+    visionOverlay.render(
+      overlayCtx,
+      frame,
+      overlayCanvas.width,
+      overlayCanvas.height,
+      timeSec,
+      dt,
+      faceMeshVisual,
+      handsVisual,
+    );
 
     if (autoFrameEnabled) {
       const mirrored = frame.faceLandmarks.length > 0 ? mirrorLandmarks(frame.faceLandmarks[0]) : null;
@@ -166,11 +230,25 @@ function tick(now: number): void {
       applyFrameTransform(cx, cy, zoom);
     }
 
-    if (vision.handsEnabled) {
+    if (handsVisual) {
       airDraw.update(frame.handLandmarks, overlayCanvas.width, overlayCanvas.height);
       controls.setGesture(gestureController.activeGesture);
       const action = gestureController.update(frame.gestures, now);
       if (action) handleGestureAction(action);
+    }
+
+    if (instrumentEnabled) {
+      const reading = airInstrument.update(frame.handLandmarks);
+      drawInstrumentHud(overlayCtx, overlayCanvas.width, overlayCanvas.height, reading);
+    }
+
+    if (postureEnabled) {
+      const mirroredPose = frame.poseLandmarks.length > 0 ? mirrorLandmarks(frame.poseLandmarks[0]) : null;
+      const reading = postureCoach.update(mirroredPose, now);
+      controls.setPosture(reading.status);
+      if (mirroredPose) {
+        visionOverlay.drawPoseSkeleton(overlayCtx, mirroredPose, POSTURE_COLORS[reading.status]);
+      }
     }
   }
 
@@ -203,8 +281,23 @@ const controls = new Controls({
       }
     }
     if (kind === "hands") {
-      vision.handsEnabled = enabled;
+      handsVisual = enabled;
+      updateHandsModelState();
       if (!enabled) controls.setGesture(null);
+    }
+    if (kind === "instrument") {
+      instrumentEnabled = enabled;
+      updateHandsModelState();
+      if (enabled) airInstrument.start();
+      else airInstrument.stop();
+    }
+    if (kind === "posture") {
+      postureEnabled = enabled;
+      vision.poseEnabled = enabled;
+      if (!enabled) {
+        postureCoach.recalibrate();
+        controls.setPosture(null);
+      }
     }
     if (enabled) void vision.ensureInit();
   },
@@ -214,6 +307,7 @@ const controls = new Controls({
     airDraw.color = color;
   },
   onClearDrawing: () => airDraw.clear(),
+  onRecalibratePosture: () => postureCoach.recalibrate(),
   onSnapshot: () => takeSnapshot(),
   onToggleRecord: () => void toggleRecording(),
   onStart: () => void startCamera(),
@@ -290,6 +384,8 @@ requestAnimationFrame(tick);
   segmentation,
   airDraw,
   autoFrame,
+  visionOverlay,
+  overlayCtx,
   frameWrapper,
   setBackgroundMode,
   freezeSegmentation: (frozen: boolean) => {
@@ -304,4 +400,12 @@ requestAnimationFrame(tick);
     applyFrameTransform(cx, cy, zoom);
     return { cx, cy, zoom };
   },
+  postureCoach,
+  airInstrument,
+  // Drives Posture Coach with synthetic (already-mirrored) pose landmarks,
+  // bypassing the network-gated pose model.
+  drivePosture: (mirroredLandmarks: Landmark[] | null, nowMs: number) => postureCoach.update(mirroredLandmarks, nowMs),
+  // Drives the Air Instrument with synthetic (raw, unmirrored -- only .y is
+  // read) hand landmarks, bypassing the network-gated gesture model.
+  driveInstrument: (handLandmarks: Landmark[][]) => airInstrument.update(handLandmarks),
 };

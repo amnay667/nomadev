@@ -1,4 +1,4 @@
-import { FaceLandmarker, GestureRecognizer, DrawingUtils } from "@mediapipe/tasks-vision";
+import { FaceLandmarker, GestureRecognizer, PoseLandmarker, DrawingUtils } from "@mediapipe/tasks-vision";
 import type { Landmark, VisionFrame } from "../vision/VisionEngine";
 import { ParticleSystem } from "./ParticleSystem";
 
@@ -7,9 +7,10 @@ const FINGERTIPS = [4, 8, 12, 16, 20];
 // Glabella (between the eyebrows) in the 468-point face mesh — our "third eye" anchor.
 const THIRD_EYE_LANDMARK = 9;
 
-function mirror(landmarks: Landmark[]): Landmark[] {
+export function mirrorLandmarks(landmarks: Landmark[]): Landmark[] {
   return landmarks.map((l) => ({ x: 1 - l.x, y: l.y, z: l.z, visibility: l.visibility }));
 }
+const mirror = mirrorLandmarks;
 
 export class VisionOverlay {
   private readonly particles = new ParticleSystem(900);
@@ -24,17 +25,19 @@ export class VisionOverlay {
     time: number,
     dt: number,
     drawFaceMesh = true,
+    drawHands = true,
   ): void {
     if (!this.drawingUtils) this.drawingUtils = new DrawingUtils(ctx);
 
-    // The face model may be running purely to drive Auto Frame, with the
-    // mesh visualization itself switched off -- landmarks still arrive
-    // every frame in that case, so gate the drawing separately.
+    // The face/hand models may be running purely to drive Auto Frame or the
+    // Air Instrument, with the visualization itself switched off --
+    // landmarks still arrive every frame in that case, so gate the drawing
+    // separately from whether landmarks are present.
     if (drawFaceMesh && frame.faceLandmarks.length > 0) {
       this.drawFace(ctx, mirror(frame.faceLandmarks[0]), width, height, time);
     }
 
-    if (frame.handLandmarks.length > 0) {
+    if (drawHands && frame.handLandmarks.length > 0) {
       for (const raw of frame.handLandmarks) {
         this.drawHandSkeleton(mirror(raw));
         this.spawnFingertipParticles(mirror(raw), width, height, time);
@@ -99,6 +102,14 @@ export class VisionOverlay {
     ctx.arc(cx + Math.cos(irisAngle) * r * 0.15, cy + Math.sin(irisAngle) * r * 0.08, r * 0.16, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
+  }
+
+  /** Draws the 33-point body skeleton, colored by the caller's current posture status. */
+  drawPoseSkeleton(ctx: CanvasRenderingContext2D, landmarks: Landmark[], color: string): void {
+    if (!this.drawingUtils) this.drawingUtils = new DrawingUtils(ctx);
+    const du = this.drawingUtils;
+    du.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, { color: `${color}b0`, lineWidth: 3 });
+    du.drawLandmarks(landmarks, { color, radius: 3, lineWidth: 1 });
   }
 
   private drawHandSkeleton(landmarks: Landmark[]): void {

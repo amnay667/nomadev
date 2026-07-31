@@ -60,10 +60,13 @@ you deploy the static build).
 
 - **Gesture control** (`src/vision/GestureController.ts`) — with Hand
   Trails enabled, canned gestures drive the app hands-free, edge-triggered
-  (must be held ~400ms, and released before re-firing, so a pinned pose
-  doesn't spam actions): 🖐️ Open_Palm → snapshot, 👍 Thumb_Up → cycle
-  background mode, ✊ Closed_Fist → start/stop recording, ✌️ Victory →
-  clear the drawing. A HUD badge shows the currently recognized gesture.
+  (must be held ~400ms and released before re-firing, plus a ~1.8s cooldown
+  per action so classifier flicker can't spam it): 🤟 ILoveYou → snapshot,
+  👍 Thumb_Up → cycle background mode, ✊ Closed_Fist → start/stop
+  recording, ✌️ Victory → clear the drawing. Open_Palm is deliberately left
+  unmapped — it's what a relaxed, resting hand looks like, so binding an
+  action to it fires constantly by accident. A HUD badge shows the
+  currently recognized gesture.
 
 - **Posture Coach** (`src/vision/PostureCoach.ts`) — MediaPipe's
   33-point BlazePose model tracks your ears, shoulders, and hips; the

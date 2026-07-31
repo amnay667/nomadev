@@ -1,7 +1,11 @@
 export type GestureAction = "snapshot" | "cycle-background" | "toggle-recording" | "clear-drawing";
 
+// Open_Palm is deliberately NOT mapped to anything: it's what a hand looks
+// like just resting open in frame (mid-wave, about to pinch-draw, etc.), so
+// binding an action to it fires constantly by accident. Every gesture here
+// is a distinctive, deliberate hand shape you wouldn't make in passing.
 const GESTURE_ACTIONS: Record<string, GestureAction> = {
-  Open_Palm: "snapshot",
+  ILoveYou: "snapshot",
   Thumb_Up: "cycle-background",
   Closed_Fist: "toggle-recording",
   Victory: "clear-drawing",
@@ -9,18 +13,24 @@ const GESTURE_ACTIONS: Record<string, GestureAction> = {
 
 // How long a gesture must be held before it fires (filters single-frame noise).
 const HOLD_MS = 400;
+// Minimum time between two firings of the *same action*, even if the hand
+// briefly drops to "None" and comes back -- classifier flicker on a noisy
+// frame shouldn't be enough to re-arm and spam an action.
+const ACTION_COOLDOWN_MS = 1800;
 
 /**
  * Turns raw per-frame gesture classifications into discrete, edge-triggered
  * actions: a gesture must be *held* for HOLD_MS and must have been preceded
  * by "None" (hand released/relaxed) before it can fire again, so pinning a
- * pose doesn't spam the same action every frame.
+ * pose doesn't spam the same action every frame. A per-action cooldown adds
+ * a second layer of protection against rapid re-fires from tracking noise.
  */
 export class GestureController {
   private currentGesture: string | null = null;
   private since = 0;
   private lastFired: string | null = null;
   private lastAction: { action: GestureAction; at: number } | null = null;
+  private lastFiredAt: Partial<Record<GestureAction, number>> = {};
 
   update(gestureNames: string[], nowMs: number): GestureAction | null {
     // With multiple hands, take whichever gesture isn't "None"/absent.
@@ -40,6 +50,9 @@ export class GestureController {
       this.lastFired = active;
       const action = GESTURE_ACTIONS[active] ?? null;
       if (action) {
+        const lastFiredAt = this.lastFiredAt[action] ?? -Infinity;
+        if (nowMs - lastFiredAt < ACTION_COOLDOWN_MS) return null;
+        this.lastFiredAt[action] = nowMs;
         this.lastAction = { action, at: nowMs };
         return action;
       }

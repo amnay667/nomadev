@@ -1,3 +1,5 @@
+import type { Features } from "./features.js";
+
 export interface TokenProfile {
   chainId: string;
   tokenAddress: string;
@@ -21,6 +23,7 @@ export interface Position {
   quantity: number;
   costUsd: number;
   openedAt: number;
+  features: Features;
 }
 
 export interface Trade {

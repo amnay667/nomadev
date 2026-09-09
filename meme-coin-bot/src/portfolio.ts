@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { config } from "./config.js";
 import type { PortfolioState, Position, Trade } from "./types.js";
+import type { Features } from "./features.js";
 
 export class Portfolio {
   state: PortfolioState;
@@ -55,6 +56,7 @@ export class Portfolio {
     quotedPriceUsd: number,
     liquidityUsd: number,
     reason: string,
+    features: Features,
   ) {
     const tradeUsd = config.positionSizeUsd;
     const impactPct = this.priceImpactPct(tradeUsd, liquidityUsd);
@@ -71,6 +73,7 @@ export class Portfolio {
       quantity,
       costUsd: tradeUsd,
       openedAt: Date.now(),
+      features,
     });
 
     this.trades.push({
@@ -93,7 +96,7 @@ export class Portfolio {
     quotedPriceUsd: number,
     liquidityUsd: number,
     reason: string,
-  ) {
+  ): number {
     const grossUsd = position.quantity * quotedPriceUsd;
     const impactPct = this.priceImpactPct(grossUsd, liquidityUsd);
     const effectivePrice = quotedPriceUsd * (1 - impactPct / 100);
@@ -122,6 +125,7 @@ export class Portfolio {
     });
 
     this.persist();
+    return pnlUsd;
   }
 
   totalValueUsd(currentPrices: Map<string, number>): number {

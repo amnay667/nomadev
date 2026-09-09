@@ -1,11 +1,19 @@
 import { config } from "./config.js";
 import { fetchLatestTokenProfiles, fetchPairsForTokens } from "./dexscreener.js";
 import { Portfolio } from "./portfolio.js";
-import { shouldEnter, exitReason } from "./strategy.js";
+import { ScoringModel } from "./model.js";
+import { evaluateEntry, exitReason } from "./strategy.js";
 import { log } from "./logger.js";
 import type { DexPair } from "./types.js";
 
+try {
+  process.loadEnvFile();
+} catch {
+  // no .env file — fine, config can also come from real env vars
+}
+
 const portfolio = new Portfolio();
+const model = new ScoringModel();
 
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -42,9 +50,10 @@ async function runCycle() {
       const price = Number(pair.priceUsd);
       const reason = exitReason(position, price);
       if (reason) {
-        portfolio.sell(position, price, pair.liquidity?.usd ?? 0, reason);
+        const pnlUsd = portfolio.sell(position, price, pair.liquidity?.usd ?? 0, reason);
+        model.learn(position.features, pnlUsd > 0 ? 1 : 0);
         log(
-          `SELL ${position.symbol} @ $${price.toFixed(6)} (${reason})`,
+          `SELL ${position.symbol} @ $${price.toFixed(6)} (${reason}, pnl $${pnlUsd.toFixed(2)})`,
         );
       }
     }
@@ -54,7 +63,19 @@ async function runCycle() {
       if (portfolio.hasPosition(address)) continue;
 
       const pair = pairsByToken.get(address);
-      if (!pair || !shouldEnter(pair)) continue;
+      if (!pair) continue;
+
+      const evaluation = await evaluateEntry(pair, model);
+      if (!evaluation) continue;
+
+      if (!evaluation.enter) {
+        if (evaluation.safetyReasons.length > 0) {
+          log(
+            `Skip ${pair.baseToken.symbol}: ${evaluation.safetyReasons.join(", ")}`,
+          );
+        }
+        continue;
+      }
 
       const price = Number(pair.priceUsd);
       portfolio.buy(
@@ -62,9 +83,12 @@ async function runCycle() {
         pair.baseToken.symbol,
         price,
         pair.liquidity?.usd ?? 0,
-        "momentum-entry",
+        "model-entry",
+        evaluation.features,
       );
-      log(`BUY ${pair.baseToken.symbol} @ $${price.toFixed(6)}`);
+      log(
+        `BUY ${pair.baseToken.symbol} @ $${price.toFixed(6)} (score ${evaluation.score.toFixed(2)})`,
+      );
     }
 
     const currentPrices = new Map<string, number>();
@@ -73,7 +97,7 @@ async function runCycle() {
     }
     const totalValue = portfolio.totalValueUsd(currentPrices);
     log(
-      `Portfolio: $${totalValue.toFixed(2)} | cash: $${portfolio.state.cashUsd.toFixed(2)} | positions: ${portfolio.state.positions.length} | realized P&L: $${portfolio.state.realizedPnlUsd.toFixed(2)}`,
+      `Portfolio: $${totalValue.toFixed(2)} | cash: $${portfolio.state.cashUsd.toFixed(2)} | positions: ${portfolio.state.positions.length} | realized P&L: $${portfolio.state.realizedPnlUsd.toFixed(2)} | model samples: ${model.sampleCount}`,
     );
   } catch (err) {
     log(`Cycle error: ${(err as Error).message}`);

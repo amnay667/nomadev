@@ -10,6 +10,7 @@ export interface EntryEvaluation {
   score: number;
   features: Features;
   safetyReasons: string[];
+  explored: boolean;
 }
 
 function passesHardFilters(pair: DexPair): boolean {
@@ -61,12 +62,22 @@ export async function evaluateEntry(
   );
 
   const score = model.score(features);
+  const passesScore = score >= config.entryScoreThreshold;
+
+  // A run of losses can push every weight (and the bias) negative at once,
+  // since entered candidates always have non-negative features — after
+  // that, every future candidate scores below the threshold forever and
+  // the model can never learn from another outcome to correct itself.
+  // Exploring anyway some of the time, even on a sub-threshold score,
+  // keeps outcomes flowing in so the model can recover.
+  const explored = !passesScore && Math.random() < config.explorationRate;
 
   return {
-    enter: safety.safe && score >= config.entryScoreThreshold,
+    enter: safety.safe && (passesScore || explored),
     score,
     features,
     safetyReasons: safety.reasons,
+    explored,
   };
 }
 

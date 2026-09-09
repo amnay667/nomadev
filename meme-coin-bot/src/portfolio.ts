@@ -128,6 +128,10 @@ export class Portfolio {
     return pnlUsd;
   }
 
+  getTrades(): Trade[] {
+    return this.trades;
+  }
+
   totalValueUsd(currentPrices: Map<string, number>): number {
     const positionsValue = this.state.positions.reduce((sum, p) => {
       const price = currentPrices.get(p.tokenAddress) ?? p.entryPriceUsd;

@@ -1,7 +1,14 @@
+try {
+  process.loadEnvFile();
+} catch {
+  // no .env file — fine, config can also come from real env vars
+}
+
 export const config = {
   chainId: "solana",
 
   pollIntervalMs: 30_000,
+  dashboardPort: Number(process.env.PORT ?? 3000),
 
   startingBalanceUsd: 1000,
 

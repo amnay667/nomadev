@@ -40,7 +40,7 @@ function computeDashboardState(currentPrices: Map<string, number>): DashboardSta
     totalPnlUsd: portfolio.state.realizedPnlUsd + unrealizedPnlUsd,
     modelSamples: model.sampleCount,
     positions: dashboardPositions,
-    trades: portfolio.getTrades(),
+    trades: portfolio.getTrades().slice(-config.dashboardTradeHistoryLimit),
     lastUpdated: Date.now(),
   };
 }

@@ -9,6 +9,7 @@ export const config = {
 
   pollIntervalMs: 30_000,
   dashboardPort: Number(process.env.PORT ?? 3000),
+  dashboardTradeHistoryLimit: 100,
 
   startingBalanceUsd: 1000,
 

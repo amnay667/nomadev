@@ -102,6 +102,11 @@ function pnlClass(n) {
 function fmtTime(ts) {
   return new Date(ts).toLocaleTimeString();
 }
+function esc(s) {
+  const div = document.createElement("div");
+  div.textContent = String(s);
+  return div.innerHTML;
+}
 
 async function refresh() {
   const res = await fetch("/api/state");
@@ -131,7 +136,7 @@ async function refresh() {
       </tr></thead>
       <tbody>\${s.positions.map(p => \`
         <tr>
-          <td>\${p.symbol}</td>
+          <td>\${esc(p.symbol)}</td>
           <td class="num">$\${p.entryPriceUsd.toFixed(6)}</td>
           <td class="num">$\${p.currentPriceUsd.toFixed(6)}</td>
           <td class="num">\${p.quantity.toFixed(2)}</td>
@@ -148,7 +153,7 @@ async function refresh() {
   if (s.trades.length === 0) {
     tradesEl.innerHTML = '<div class="empty">No trades yet.</div>';
   } else {
-    const rows = s.trades.slice().reverse().slice(0, 100);
+    const rows = s.trades.slice().reverse();
     tradesEl.innerHTML = \`<table>
       <thead><tr>
         <th>Time</th><th>Side</th><th>Symbol</th><th class="num">Price</th>
@@ -159,7 +164,7 @@ async function refresh() {
         <tr>
           <td>\${fmtTime(t.timestamp)}</td>
           <td class="side-\${t.side}">\${t.side}</td>
-          <td>\${t.symbol}</td>
+          <td>\${esc(t.symbol)}</td>
           <td class="num">$\${t.priceUsd.toFixed(6)}</td>
           <td class="num">\${t.quantity.toFixed(2)}</td>
           <td class="num">\${fmtUsd(t.valueUsd)}</td>

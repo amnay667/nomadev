@@ -4,16 +4,48 @@ import { Portfolio } from "./portfolio.js";
 import { ScoringModel } from "./model.js";
 import { evaluateEntry, exitReason } from "./strategy.js";
 import { log } from "./logger.js";
+import { startDashboardServer, type DashboardState } from "./server.js";
 import type { DexPair } from "./types.js";
-
-try {
-  process.loadEnvFile();
-} catch {
-  // no .env file — fine, config can also come from real env vars
-}
 
 const portfolio = new Portfolio();
 const model = new ScoringModel();
+
+function computeDashboardState(currentPrices: Map<string, number>): DashboardState {
+  const dashboardPositions = portfolio.state.positions.map((p) => {
+    const currentPriceUsd = currentPrices.get(p.tokenAddress) ?? p.entryPriceUsd;
+    const unrealizedPnlUsd = p.quantity * currentPriceUsd - p.costUsd;
+    return {
+      symbol: p.symbol,
+      tokenAddress: p.tokenAddress,
+      entryPriceUsd: p.entryPriceUsd,
+      currentPriceUsd,
+      quantity: p.quantity,
+      costUsd: p.costUsd,
+      unrealizedPnlUsd,
+      unrealizedPnlPct: (unrealizedPnlUsd / p.costUsd) * 100,
+      openedAt: p.openedAt,
+    };
+  });
+  const unrealizedPnlUsd = dashboardPositions.reduce(
+    (sum, p) => sum + p.unrealizedPnlUsd,
+    0,
+  );
+
+  return {
+    startingBalanceUsd: config.startingBalanceUsd,
+    cashUsd: portfolio.state.cashUsd,
+    totalValueUsd: portfolio.totalValueUsd(currentPrices),
+    realizedPnlUsd: portfolio.state.realizedPnlUsd,
+    unrealizedPnlUsd,
+    totalPnlUsd: portfolio.state.realizedPnlUsd + unrealizedPnlUsd,
+    modelSamples: model.sampleCount,
+    positions: dashboardPositions,
+    trades: portfolio.getTrades().slice(-config.dashboardTradeHistoryLimit),
+    lastUpdated: Date.now(),
+  };
+}
+
+let latestState: DashboardState = computeDashboardState(new Map());
 
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -95,9 +127,11 @@ async function runCycle() {
     for (const [address, pair] of pairsByToken) {
       currentPrices.set(address, Number(pair.priceUsd));
     }
-    const totalValue = portfolio.totalValueUsd(currentPrices);
+
+    latestState = computeDashboardState(currentPrices);
+
     log(
-      `Portfolio: $${totalValue.toFixed(2)} | cash: $${portfolio.state.cashUsd.toFixed(2)} | positions: ${portfolio.state.positions.length} | realized P&L: $${portfolio.state.realizedPnlUsd.toFixed(2)} | model samples: ${model.sampleCount}`,
+      `Portfolio: $${latestState.totalValueUsd.toFixed(2)} | cash: $${portfolio.state.cashUsd.toFixed(2)} | positions: ${portfolio.state.positions.length} | realized P&L: $${portfolio.state.realizedPnlUsd.toFixed(2)} | unrealized P&L: $${latestState.unrealizedPnlUsd.toFixed(2)} | model samples: ${model.sampleCount}`,
     );
   } catch (err) {
     log(`Cycle error: ${(err as Error).message}`);
@@ -105,5 +139,6 @@ async function runCycle() {
 }
 
 log(`Starting meme-coin-bot (paper trading, chain=${config.chainId})`);
+startDashboardServer(() => latestState, config.dashboardPort);
 runCycle();
 setInterval(runCycle, config.pollIntervalMs);

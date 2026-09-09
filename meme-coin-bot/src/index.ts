@@ -90,6 +90,9 @@ async function runCycle() {
       }
     }
 
+    let passedHardFilters = 0;
+    let passedSafety = 0;
+
     for (const address of candidateAddresses) {
       if (!portfolio.canOpenNewPosition()) break;
       if (portfolio.hasPosition(address)) continue;
@@ -99,15 +102,22 @@ async function runCycle() {
 
       const evaluation = await evaluateEntry(pair, model);
       if (!evaluation) continue;
+      passedHardFilters++;
 
       if (!evaluation.enter) {
         if (evaluation.safetyReasons.length > 0) {
           log(
             `Skip ${pair.baseToken.symbol}: ${evaluation.safetyReasons.join(", ")}`,
           );
+        } else {
+          passedSafety++;
+          log(
+            `Skip ${pair.baseToken.symbol}: score ${evaluation.score.toFixed(2)} below threshold ${config.entryScoreThreshold}`,
+          );
         }
         continue;
       }
+      passedSafety++;
 
       const price = Number(pair.priceUsd);
       portfolio.buy(
@@ -122,6 +132,10 @@ async function runCycle() {
         `BUY ${pair.baseToken.symbol} @ $${price.toFixed(6)} (score ${evaluation.score.toFixed(2)})`,
       );
     }
+
+    log(
+      `Scanned ${candidateAddresses.length} candidates | ${passedHardFilters} passed liquidity/volume/momentum | ${passedSafety} passed safety check`,
+    );
 
     const currentPrices = new Map<string, number>();
     for (const [address, pair] of pairsByToken) {

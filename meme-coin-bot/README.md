@@ -89,7 +89,10 @@ All knobs live in `src/config.ts`:
   trained on this bot's own closed trades. It is not a deep-learning system
   and it cannot learn anything from before it has enough closed trades to
   learn from — expect it to behave close to the hard filters alone for the
-  first few dozen trades.
+  first few dozen trades. It also explores: on a sub-threshold score it
+  still enters some of the time (`explorationRate`), because otherwise a
+  single early loss can push every weight negative at once and permanently
+  stop the model from ever seeing another outcome to learn from.
 - The Twitter sentiment score is a blunt keyword lexicon, not NLP — treat it
   as a rough mention-volume/tone signal, not ground truth.
 - Meme coin pools are thin and volatile; the price-impact model is a rough

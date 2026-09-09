@@ -46,6 +46,10 @@ export const config = {
   // learn from.
   entryScoreThreshold: 0.5,
   learningRate: 0.05,
+  // Chance to enter anyway on a sub-threshold score, so a run of losses
+  // (which can push every weight negative at once — see evaluateEntry)
+  // can't permanently stop the model from ever seeing another outcome.
+  explorationRate: 0.15,
   normLiquidityUsd: 50_000,
   normVolumeH1Usd: 20_000,
   normPriceChangeH1Pct: 50,

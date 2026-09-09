@@ -125,11 +125,11 @@ async function runCycle() {
         pair.baseToken.symbol,
         price,
         pair.liquidity?.usd ?? 0,
-        "model-entry",
+        evaluation.explored ? "explore-entry" : "model-entry",
         evaluation.features,
       );
       log(
-        `BUY ${pair.baseToken.symbol} @ $${price.toFixed(6)} (score ${evaluation.score.toFixed(2)})`,
+        `BUY ${pair.baseToken.symbol} @ $${price.toFixed(6)} (score ${evaluation.score.toFixed(2)}${evaluation.explored ? ", exploration" : ""})`,
       );
     }
 

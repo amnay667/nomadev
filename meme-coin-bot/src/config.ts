@@ -37,8 +37,14 @@ export const config = {
   // Social signal (requires X_BEARER_TOKEN; disabled without it)
   twitterMaxResults: 50,
 
-  // Self-learning entry scoring
-  entryScoreThreshold: 0.55,
+  // Self-learning entry scoring. A freshly-initialized model has zero
+  // weights and zero bias, so it scores every candidate at exactly 0.5
+  // (sigmoid(0)) regardless of features — the threshold must be <= 0.5 or
+  // the model can never make a first trade to learn from, and gets stuck
+  // forever. Cold-start selectivity comes from the hard filters and safety
+  // check; the model only starts discriminating once it has outcomes to
+  // learn from.
+  entryScoreThreshold: 0.5,
   learningRate: 0.05,
   normLiquidityUsd: 50_000,
   normVolumeH1Usd: 20_000,

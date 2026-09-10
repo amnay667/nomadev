@@ -52,6 +52,7 @@ export class Portfolio {
 
   buy(
     tokenAddress: string,
+    pairAddress: string,
     symbol: string,
     quotedPriceUsd: number,
     liquidityUsd: number,
@@ -68,6 +69,7 @@ export class Portfolio {
     this.state.cashUsd -= tradeUsd;
     this.state.positions.push({
       tokenAddress,
+      pairAddress,
       symbol,
       entryPriceUsd: effectivePrice,
       quantity,

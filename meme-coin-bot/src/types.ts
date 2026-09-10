@@ -18,6 +18,7 @@ export interface DexPair {
 
 export interface Position {
   tokenAddress: string;
+  pairAddress: string;
   symbol: string;
   entryPriceUsd: number;
   quantity: number;

@@ -17,6 +17,7 @@ function computeDashboardState(currentPrices: Map<string, number>): DashboardSta
     return {
       symbol: p.symbol,
       tokenAddress: p.tokenAddress,
+      pairAddress: p.pairAddress,
       entryPriceUsd: p.entryPriceUsd,
       currentPriceUsd,
       quantity: p.quantity,
@@ -32,6 +33,7 @@ function computeDashboardState(currentPrices: Map<string, number>): DashboardSta
   );
 
   return {
+    chainId: config.chainId,
     startingBalanceUsd: config.startingBalanceUsd,
     cashUsd: portfolio.state.cashUsd,
     totalValueUsd: portfolio.totalValueUsd(currentPrices),
@@ -122,6 +124,7 @@ async function runCycle() {
       const price = Number(pair.priceUsd);
       portfolio.buy(
         address,
+        pair.pairAddress,
         pair.baseToken.symbol,
         price,
         pair.liquidity?.usd ?? 0,

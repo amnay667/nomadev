@@ -4,6 +4,7 @@ import type { Trade } from "./types.js";
 export interface DashboardPosition {
   symbol: string;
   tokenAddress: string;
+  pairAddress: string;
   entryPriceUsd: number;
   currentPriceUsd: number;
   quantity: number;
@@ -14,6 +15,7 @@ export interface DashboardPosition {
 }
 
 export interface DashboardState {
+  chainId: string;
   startingBalanceUsd: number;
   cashUsd: number;
   totalValueUsd: number;
@@ -71,6 +73,29 @@ const PAGE = `<!doctype html>
   .side-BUY { color: #60a5fa; }
   .side-SELL { color: #f0abfc; }
   .updated { color: #4b5163; font-size: 12px; margin-top: 8px; }
+  .charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 16px;
+  }
+  .chart-card {
+    background: #12151c;
+    border: 1px solid #1f2430;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .chart-card .chart-header {
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-bottom: 1px solid #1f2430;
+  }
+  .chart-card iframe {
+    display: block;
+    width: 100%;
+    height: 360px;
+    border: none;
+  }
 </style>
 </head>
 <body>
@@ -82,6 +107,11 @@ const PAGE = `<!doctype html>
   <section>
     <h2>Open positions</h2>
     <div id="positions"></div>
+  </section>
+
+  <section>
+    <h2>Charts</h2>
+    <div id="charts" class="charts"></div>
   </section>
 
   <section>
@@ -107,6 +137,8 @@ function esc(s) {
   div.textContent = String(s);
   return div.innerHTML;
 }
+
+let renderedChartPairs = null;
 
 async function refresh() {
   const res = await fetch("/api/state");
@@ -147,6 +179,24 @@ async function refresh() {
         </tr>\`).join("")}
       </tbody>
     </table>\`;
+  }
+
+  // Rebuild chart iframes only when the set of open positions actually
+  // changes — reloading them every 5s refresh would flicker and reset
+  // whatever timeframe/zoom the viewer picked on each chart.
+  const chartPairsKey = s.positions.map(p => p.pairAddress).join(",");
+  if (chartPairsKey !== renderedChartPairs) {
+    renderedChartPairs = chartPairsKey;
+    const chartsEl = document.getElementById("charts");
+    if (s.positions.length === 0) {
+      chartsEl.innerHTML = '<div class="empty">No open positions.</div>';
+    } else {
+      chartsEl.innerHTML = s.positions.map(p => \`
+        <div class="chart-card">
+          <div class="chart-header">\${esc(p.symbol)}</div>
+          <iframe src="https://dexscreener.com/\${encodeURIComponent(s.chainId)}/\${encodeURIComponent(p.pairAddress)}?embed=1&theme=dark&trades=0&info=0" loading="lazy"></iframe>
+        </div>\`).join("");
+    }
   }
 
   const tradesEl = document.getElementById("trades");

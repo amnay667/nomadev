@@ -44,9 +44,10 @@ npm start        # or: npm run dev (auto-restarts on file change)
 
 A dashboard also starts alongside the bot at **http://localhost:3000** (change
 with the `PORT` env var). It shows current cash, realized/unrealized/total
-P&L, open positions with live unrealized P&L per position, and full trade
-history — refreshing every 5 seconds. In a GitHub Codespace, open the
-"Ports" tab and click the forwarded 3000 link.
+P&L, open positions with live unrealized P&L per position, a live
+[DexScreener](https://dexscreener.com) chart embed for each open position,
+and full trade history — refreshing every 5 seconds. In a GitHub Codespace,
+open the "Ports" tab and click the forwarded 3000 link.
 
 ### Enabling the social signal (optional)
 

@@ -13,19 +13,19 @@ export const config = {
 
   startingBalanceUsd: 1000,
 
-  // Entry filters
-  minLiquidityUsd: 20_000,
-  minVolumeH1Usd: 10_000,
-  minPriceChangeH1Pct: 5,
+  // Entry filters (aggressive: catch tokens earlier, on weaker signals)
+  minLiquidityUsd: 8_000,
+  minVolumeH1Usd: 4_000,
+  minPriceChangeH1Pct: 3,
 
-  // Position sizing / risk
-  maxOpenPositions: 5,
-  positionSizeUsd: 100,
+  // Position sizing / risk (aggressive: bigger bets, more of them at once)
+  maxOpenPositions: 10,
+  positionSizeUsd: 150,
 
-  // Exit rules
-  takeProfitPct: 40,
-  stopLossPct: 20,
-  maxHoldMs: 6 * 60 * 60 * 1000, // 6 hours
+  // Exit rules (aggressive: wider bands both ways, faster turnover)
+  takeProfitPct: 70,
+  stopLossPct: 30,
+  maxHoldMs: 3 * 60 * 60 * 1000, // 3 hours
 
   // Simulated execution costs
   dexFeePct: 0.3,
@@ -44,12 +44,13 @@ export const config = {
   // forever. Cold-start selectivity comes from the hard filters and safety
   // check; the model only starts discriminating once it has outcomes to
   // learn from.
-  entryScoreThreshold: 0.5,
+  // (aggressive: lower bar to enter, more willingness to take chances)
+  entryScoreThreshold: 0.45,
   learningRate: 0.05,
   // Chance to enter anyway on a sub-threshold score, so a run of losses
   // (which can push every weight negative at once — see evaluateEntry)
   // can't permanently stop the model from ever seeing another outcome.
-  explorationRate: 0.15,
+  explorationRate: 0.25,
   normLiquidityUsd: 50_000,
   normVolumeH1Usd: 20_000,
   normPriceChangeH1Pct: 50,

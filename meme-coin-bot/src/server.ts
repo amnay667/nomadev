@@ -194,7 +194,9 @@ async function refresh() {
       chartsEl.innerHTML = s.positions.map(p => \`
         <div class="chart-card">
           <div class="chart-header">\${esc(p.symbol)}</div>
-          <iframe src="https://dexscreener.com/\${encodeURIComponent(s.chainId)}/\${encodeURIComponent(p.pairAddress)}?embed=1&theme=dark&trades=0&info=0" loading="lazy"></iframe>
+          \${p.pairAddress
+            ? \`<iframe src="https://dexscreener.com/\${encodeURIComponent(s.chainId)}/\${encodeURIComponent(p.pairAddress)}?embed=1&theme=dark&trades=0&info=0" loading="lazy"></iframe>\`
+            : '<div class="empty">Chart unavailable — this position was opened before chart tracking was added.</div>'}
         </div>\`).join("");
     }
   }

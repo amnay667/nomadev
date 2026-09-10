@@ -102,5 +102,11 @@ All knobs live in `src/config.ts`:
 - The safety check catches the most common rug patterns (unrenounced
   mint/freeze authority, concentrated holders) but is not a guarantee — it's
   one more signal, same as a human trader checking RugCheck before buying.
+- Chart embeds can spin on "Loading pair..." forever for very freshly-listed
+  pairs — confirmed live: DexScreener's own site returns "Token or Pair Not
+  Found" for some pairs their API already has data for, presumably a lag in
+  their own indexing. That's their data coverage, not something this bot can
+  fix. Every chart has an "Open on DexScreener ↗" link so you can check the
+  pair directly instead of trusting an embed that might never resolve.
 - To reset the simulated wallet or the learned model, delete the relevant
   file(s) in `data/`.

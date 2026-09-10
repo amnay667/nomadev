@@ -260,12 +260,17 @@ setInterval(refresh, 5000);
 
 export function startDashboardServer(getState: () => DashboardState, port: number) {
   const server = createServer((req, res) => {
-    if (req.url === "/api/state") {
+    // Codespaces/VS Code port-forwarding links append a cache-busting query
+    // string (e.g. "/?vscodeBrowserReqId=..."), so route on the pathname
+    // alone rather than exact-matching the full url.
+    const pathname = (req.url ?? "/").split("?")[0];
+
+    if (pathname === "/api/state") {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify(getState()));
       return;
     }
-    if (req.url === "/" || req.url === "/index.html") {
+    if (pathname === "/" || pathname === "/index.html") {
       res.writeHead(200, { "content-type": "text/html" });
       res.end(PAGE);
       return;

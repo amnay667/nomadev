@@ -85,11 +85,23 @@ const PAGE = `<!doctype html>
     overflow: hidden;
   }
   .chart-card .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     padding: 10px 14px;
     font-size: 13px;
     font-weight: 600;
     border-bottom: 1px solid #1f2430;
   }
+  .chart-card .chart-header a {
+    color: #7d8494;
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .chart-card .chart-header a:hover { color: #a8adba; }
   .chart-card iframe {
     display: block;
     width: 100%;
@@ -191,13 +203,21 @@ async function refresh() {
     if (s.positions.length === 0) {
       chartsEl.innerHTML = '<div class="empty">No open positions.</div>';
     } else {
-      chartsEl.innerHTML = s.positions.map(p => \`
+      chartsEl.innerHTML = s.positions.map(p => {
+        const dexUrl = p.pairAddress
+          ? \`https://dexscreener.com/\${encodeURIComponent(s.chainId)}/\${encodeURIComponent(p.pairAddress)}\`
+          : null;
+        return \`
         <div class="chart-card">
-          <div class="chart-header">\${esc(p.symbol)}</div>
-          \${p.pairAddress
-            ? \`<iframe src="https://dexscreener.com/\${encodeURIComponent(s.chainId)}/\${encodeURIComponent(p.pairAddress)}?embed=1&theme=dark&trades=0&info=0" loading="lazy"></iframe>\`
+          <div class="chart-header">
+            <span>\${esc(p.symbol)}</span>
+            \${dexUrl ? \`<a href="\${dexUrl}" target="_blank" rel="noopener noreferrer">Open on DexScreener ↗</a>\` : ""}
+          </div>
+          \${dexUrl
+            ? \`<iframe src="\${dexUrl}?embed=1&theme=dark&trades=0&info=0" loading="lazy"></iframe>\`
             : '<div class="empty">Chart unavailable — this position was opened before chart tracking was added.</div>'}
-        </div>\`).join("");
+        </div>\`;
+      }).join("");
     }
   }
 
